@@ -69,6 +69,21 @@ function getRandomPosition(radius) {
     };
 }
 
+function getRandomFoodSize() {
+    // Weighted distribution: 60% small, 30% medium, 10% large
+    const rand = Math.random();
+    if (rand < 0.6) {
+        // Small food: 3-5 radius
+        return Math.floor(Math.random() * 3) + 3;
+    } else if (rand < 0.9) {
+        // Medium food: 6-8 radius
+        return Math.floor(Math.random() * 3) + 6;
+    } else {
+        // Large food: 9-12 radius
+        return Math.floor(Math.random() * 4) + 9;
+    }
+}
+
 function getNewRadius(oldRadius, eatenRadius) {
     const oldArea = Math.PI * oldRadius * oldRadius;
     const eatenArea = Math.PI * eatenRadius * eatenRadius;
@@ -91,10 +106,11 @@ function getEjectedPelletRadius(currentRadius, massPercent) {
 // --- Game Initialization ---
 function initFood() {
     for (let i = 0; i < FOOD_COUNT; i++) {
+        const radius = getRandomFoodSize();
         food.push({
             id: `f${i}`,
-            ...getRandomPosition(5),
-            radius: 5,
+            ...getRandomPosition(radius),
+            radius: radius,
             color: getRandomColor(),
         });
     }
@@ -529,7 +545,9 @@ setInterval(() => {
                     blob.radius = getNewRadius(blob.radius, f.radius);
                     blob.speed = Math.max(0.5, 4 - blob.radius / 40);
                     food.splice(i, 1);
-                    food.push({ id: `f${Date.now()}`, ...getRandomPosition(5), radius: 5, color: getRandomColor() });
+                    // Respawn with random size
+                    const newRadius = getRandomFoodSize();
+                    food.push({ id: `f${Date.now()}`, ...getRandomPosition(newRadius), radius: newRadius, color: getRandomColor() });
                 }
             }
 

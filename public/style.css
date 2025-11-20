@@ -109,7 +109,7 @@ body.dark-mode #leaderboardList li {
     padding: 15px;
     border-radius: 10px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-    min-width: 200px;
+    width: 200px;
     z-index: 100;
 }
 
@@ -154,6 +154,28 @@ body.dark-mode #leaderboardList li {
 #leaderboardList li:nth-child(3) {
     color: #CD7F32;
     font-weight: bold;
+}
+
+#howToPlay {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+#howToPlay p {
+    margin: 0;
+    color: #555;
+    text-align: center;
+}
+
+body.dark-mode #howToPlay {
+    border-top-color: #555;
+}
+
+body.dark-mode #howToPlay p {
+    color: #bbb;
 }
 
 #controls {

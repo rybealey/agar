@@ -44,6 +44,12 @@ const nameInput = document.getElementById('nameInput');
 const playButton = document.getElementById('playButton');
 const skinOptions = document.getElementById('skinOptions');
 
+// Load saved player name from localStorage
+const savedPlayerName = localStorage.getItem('playerName');
+if (savedPlayerName) {
+    nameInput.value = savedPlayerName;
+}
+
 // Preload skin image
 function preloadSkinImage(filename) {
     if (!filename || filename === 'none' || preloadedSkins.has(filename)) {
@@ -155,6 +161,9 @@ function setupSocketListeners() {
 
 function startGame() {
     const playerName = nameInput.value.trim();
+
+    // Save player name to localStorage
+    localStorage.setItem('playerName', playerName);
 
     // Connect to server
     socket = io();

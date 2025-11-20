@@ -751,10 +751,15 @@ io.on('connection', (socket) => {
     });
 
     // Handle player skin selection
-    socket.on('set-skin', (skin) => {
+    socket.on('set-skin', (skin, customColor) => {
         const player = players[socket.id];
         if (!player) return;
         player.skin = skin || 'none';
+
+        // If custom color is selected, use the provided color
+        if (skin === 'custom' && customColor) {
+            player.color = customColor;
+        }
     });
 
     // Handle split

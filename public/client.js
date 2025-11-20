@@ -9,6 +9,7 @@ let map = { width: 2000, height: 2000 };
 let me = null;
 let gameStarted = false;
 let selectedSkin = 'none'; // Track selected skin
+let customColor = '#ff6b6b'; // Track custom color selection
 let skinImages = {}; // Cache loaded skin images
 let preloadedSkins = new Set(); // Track which skins have been preloaded
 
@@ -118,7 +119,27 @@ skinOptions.addEventListener('click', (e) => {
     // Add selection to clicked option
     option.classList.add('selected');
     selectedSkin = option.dataset.skin;
+
+    // Show/hide color picker for custom color option
+    const colorPickerContainer = document.getElementById('colorPickerContainer');
+    if (selectedSkin === 'custom') {
+        colorPickerContainer.style.display = 'block';
+    } else {
+        colorPickerContainer.style.display = 'none';
+    }
 });
+
+// Handle color picker changes
+const colorPicker = document.getElementById('colorPicker');
+const customColorPreview = document.getElementById('customColorPreview');
+
+colorPicker.addEventListener('input', (e) => {
+    customColor = e.target.value;
+    customColorPreview.style.background = customColor;
+});
+
+// Initialize custom color preview
+customColorPreview.style.background = customColor;
 
 // Load skins when page loads
 loadAvailableSkins();
@@ -214,7 +235,13 @@ function startGame() {
     // Send player name and skin after connection is established
     socket.on('connect', () => {
         socket.emit('set-name', playerName);
-        socket.emit('set-skin', selectedSkin);
+
+        // Send skin and custom color if applicable
+        if (selectedSkin === 'custom') {
+            socket.emit('set-skin', selectedSkin, customColor);
+        } else {
+            socket.emit('set-skin', selectedSkin);
+        }
     });
 
     nameOverlay.style.display = 'none';

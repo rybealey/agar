@@ -117,6 +117,18 @@ function initFood() {
 }
 
 initFood();
+
+// Ensure skins directory exists at startup
+const skinsDir = path.join(__dirname, 'public', 'skins');
+if (!fs.existsSync(skinsDir)) {
+    try {
+        fs.mkdirSync(skinsDir, { recursive: true });
+        console.log('Created skins directory:', skinsDir);
+    } catch (err) {
+        console.error('Error creating skins directory:', err);
+    }
+}
+
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -184,27 +196,48 @@ app.get('/api/skins', (req, res) => {
 
 // Upload a new skin
 app.post('/api/skins/upload', (req, res) => {
+    console.log('Received upload request');
+
     upload.single('skin')(req, res, (err) => {
         if (err) {
             console.error('Upload error:', err);
+            if (err instanceof multer.MulterError) {
+                if (err.code === 'LIMIT_FILE_SIZE') {
+                    return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+                }
+                return res.status(400).json({ error: `Upload error: ${err.message}` });
+            }
             return res.status(400).json({ error: err.message || 'Upload failed' });
         }
 
         if (!req.file) {
+            console.error('No file in request');
             return res.status(400).json({ error: 'No file uploaded' });
         }
 
-        // Save skin name to metadata
-        const skinName = req.body.skinName || req.file.originalname.replace(/\.[^.]+$/, '');
-        const metadata = loadSkinsMetadata();
-        metadata[req.file.filename] = skinName;
-        saveSkinsMetadata(metadata);
+        console.log('File uploaded successfully:', req.file.filename);
 
-        res.json({
-            message: 'Skin uploaded successfully',
-            filename: req.file.filename,
-            name: skinName
-        });
+        try {
+            // Save skin name to metadata
+            const skinName = req.body.skinName || req.file.originalname.replace(/\.[^.]+$/, '');
+            const metadata = loadSkinsMetadata();
+            metadata[req.file.filename] = skinName;
+            saveSkinsMetadata(metadata);
+
+            res.json({
+                message: 'Skin uploaded successfully',
+                filename: req.file.filename,
+                name: skinName
+            });
+        } catch (metadataErr) {
+            console.error('Error saving metadata:', metadataErr);
+            // File was uploaded successfully, just metadata failed
+            res.json({
+                message: 'Skin uploaded successfully (metadata save failed)',
+                filename: req.file.filename,
+                name: req.file.originalname.replace(/\.[^.]+$/, '')
+            });
+        }
     });
 });
 

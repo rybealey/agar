@@ -174,6 +174,68 @@ EOF
     echo ""
     echo "Your game is now accessible at: http://$SERVER_NAME"
     echo ""
+
+    # Ask about SSL certificate
+    echo "=========================================="
+    echo "  SSL Certificate Setup (Optional)"
+    echo "=========================================="
+    echo ""
+
+    # Check if domain name is valid (not an IP address)
+    if [[ $SERVER_NAME =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        print_info "SSL certificates cannot be issued for IP addresses. Skipping SSL setup."
+        print_info "Please use a domain name if you want SSL/HTTPS."
+        echo ""
+    else
+        read -p "Do you want to install an SSL certificate with Let's Encrypt? (y/n): " SSL_REPLY
+        echo ""
+
+        if [ "$SSL_REPLY" = "y" ] || [ "$SSL_REPLY" = "Y" ]; then
+            # Install certbot
+            print_info "Installing Certbot..."
+            wait_for_apt
+            sudo apt-get install -y certbot python3-certbot-nginx
+            print_success "Certbot installed"
+
+            # Prompt for email
+            read -p "Enter your email address for SSL certificate notifications: " SSL_EMAIL
+            echo ""
+
+            # Obtain and install certificate
+            print_info "Obtaining SSL certificate for $SERVER_NAME..."
+            print_info "Note: Make sure your domain DNS is pointing to this server!"
+            echo ""
+
+            if sudo certbot --nginx -d "$SERVER_NAME" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect; then
+                print_success "SSL certificate installed successfully!"
+                print_success "Your game is now accessible at: https://$SERVER_NAME"
+                echo ""
+
+                # Setup auto-renewal
+                print_info "Setting up automatic certificate renewal..."
+                sudo systemctl enable certbot.timer
+                sudo systemctl start certbot.timer
+                print_success "Auto-renewal configured (certificates will renew automatically)"
+                echo ""
+            else
+                print_error "SSL certificate installation failed."
+                print_info "This usually means:"
+                print_info "  1. Your domain DNS is not pointing to this server yet"
+                print_info "  2. Port 80 is not accessible from the internet"
+                print_info "  3. The domain name is incorrect"
+                echo ""
+                print_info "You can try again later with:"
+                print_info "  sudo certbot --nginx -d $SERVER_NAME"
+                echo ""
+            fi
+        else
+            print_info "Skipping SSL certificate installation"
+            print_info "You can install it later with:"
+            print_info "  sudo apt-get install certbot python3-certbot-nginx"
+            print_info "  sudo certbot --nginx -d $SERVER_NAME"
+            echo ""
+        fi
+    fi
 else
     print_info "Skipping Nginx installation"
     echo ""
@@ -214,19 +276,28 @@ echo "     npm start"
 echo ""
 echo "  2. Access your game:"
 if [ -n "$SERVER_NAME" ]; then
-    echo "     http://$SERVER_NAME"
+    echo "     http://$SERVER_NAME (or https:// if SSL was configured)"
 else
     echo "     http://YOUR_SERVER_IP:3000"
 fi
 echo ""
-echo "  3. Optional - Set up SSL with Let's Encrypt:"
-echo "     sudo apt-get install certbot python3-certbot-nginx"
-echo "     sudo certbot --nginx -d YOUR_DOMAIN"
+echo "  3. Admin Panel:"
+echo "     Access /admin.html to manage game skins"
 echo ""
 echo "Game Controls:"
 echo "  • Mouse: Move your blob"
 echo "  • Space: Split into smaller blobs"
 echo "  • W: Eject mass"
+echo ""
+echo "Useful Commands:"
+if command -v pm2 &> /dev/null; then
+    echo "  • pm2 logs agar     - View application logs"
+    echo "  • pm2 restart agar  - Restart application"
+fi
+if [ -f "/etc/nginx/sites-available/agar" ]; then
+    echo "  • sudo systemctl status nginx   - Check Nginx status"
+    echo "  • sudo certbot renew --dry-run  - Test SSL renewal"
+fi
 echo ""
 print_success "Happy gaming!"
 echo ""

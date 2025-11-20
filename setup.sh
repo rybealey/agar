@@ -1,14 +1,14 @@
 #!/bin/bash
 
 ##############################################
-# Agar.io Clone - VM Deployment Script
+# Agar Chungus - VM Deployment Script
 # This script sets up the game on a fresh VM
 ##############################################
 
 set -e  # Exit on error
 
 echo "=========================================="
-echo "  Agar.io Clone - Deployment Script"
+echo "  Agar Chungus - Deployment Script"
 echo "=========================================="
 echo ""
 
@@ -31,6 +31,25 @@ print_info() {
     echo -e "${YELLOW}→ $1${NC}"
 }
 
+# Function to wait for dpkg lock to be released
+wait_for_apt() {
+    local i=0
+    while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
+        if [ $i -eq 0 ]; then
+            print_info "Waiting for other software managers to finish..."
+        fi
+        sleep 1
+        i=$((i+1))
+        if [ $i -gt 300 ]; then
+            print_error "Timeout waiting for package manager lock. Please try again later."
+            exit 1
+        fi
+    done
+    if [ $i -gt 0 ]; then
+        print_success "Package manager is now available"
+    fi
+}
+
 # Check if running as root
 if [ "$EUID" -eq 0 ]; then
     print_error "Please do not run this script as root. Run as a normal user with sudo privileges."
@@ -46,6 +65,7 @@ echo ""
 
 # Step 1: Update system packages
 print_info "Updating system packages..."
+wait_for_apt
 sudo apt-get update -y
 print_success "System packages updated"
 echo ""
@@ -53,7 +73,9 @@ echo ""
 # Step 2: Install Node.js if not present
 if ! command -v node &> /dev/null; then
     print_info "Node.js not found. Installing Node.js 20.x LTS..."
+    wait_for_apt
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    wait_for_apt
     sudo apt-get install -y nodejs
     print_success "Node.js installed: $(node --version)"
 else
@@ -73,10 +95,10 @@ echo "  Production Setup (Optional)"
 echo "=========================================="
 echo ""
 
-read -p "Do you want to install PM2 for production deployment? (y/n): " -n 1 -r
+read -p "Do you want to install PM2 for production deployment? (y/n): " REPLY
 echo ""
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     # Install PM2 globally
     print_info "Installing PM2..."
     sudo npm install -g pm2
@@ -106,12 +128,13 @@ fi
 echo ""
 
 # Step 5: Ask about Nginx setup
-read -p "Do you want to install and configure Nginx as a reverse proxy? (y/n): " -n 1 -r
+read -p "Do you want to install and configure Nginx as a reverse proxy? (y/n): " REPLY
 echo ""
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     # Install Nginx
     print_info "Installing Nginx..."
+    wait_for_apt
     sudo apt-get install -y nginx
 
     # Get server IP or domain
@@ -159,11 +182,12 @@ else
 fi
 
 # Step 6: Configure firewall
-read -p "Do you want to configure UFW firewall? (y/n): " -n 1 -r
+read -p "Do you want to configure UFW firewall? (y/n): " REPLY
 echo ""
 
-if [[ $REPLY =~ ^[Yy]$ ]]; then
+if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     print_info "Configuring UFW firewall..."
+    wait_for_apt
     sudo apt-get install -y ufw
     sudo ufw allow ssh
     sudo ufw allow 80/tcp
@@ -182,14 +206,14 @@ echo "=========================================="
 echo "  Deployment Complete!"
 echo "=========================================="
 echo ""
-print_success "The Agar.io clone is now set up!"
+print_success "Agar Chungus is now set up!"
 echo ""
 echo "Next steps:"
 echo "  1. If you didn't use PM2, start the server manually:"
 echo "     npm start"
 echo ""
 echo "  2. Access your game:"
-if [[ -n $SERVER_NAME ]]; then
+if [ -n "$SERVER_NAME" ]; then
     echo "     http://$SERVER_NAME"
 else
     echo "     http://YOUR_SERVER_IP:3000"

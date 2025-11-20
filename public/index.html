@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agar.io Clone</title>
+    <title>Agar Chungus</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -11,6 +11,18 @@
         <div id="nameModal">
             <h1>Enter Your Name</h1>
             <input type="text" id="nameInput" placeholder="Your name (optional)" maxlength="15" autofocus>
+
+            <div id="skinSelection">
+                <h3>Choose Your Skin</h3>
+                <div id="skinOptions">
+                    <div class="skin-option" data-skin="none">
+                        <div class="skin-preview color-preview"></div>
+                        <div class="skin-label">Random Color</div>
+                    </div>
+                    <div id="skinLoader">Loading skins...</div>
+                </div>
+            </div>
+
             <div id="darkModeToggle">
                 <label>
                     <input type="checkbox" id="darkModeCheckbox">
@@ -23,6 +35,10 @@
     <div id="leaderboard">
         <h2>Leaderboard</h2>
         <ol id="leaderboardList"></ol>
+        <div id="controls">
+            <div><strong>Space:</strong> Split</div>
+            <div><strong>W:</strong> Eject Mass</div>
+        </div>
     </div>
     <canvas id="gameCanvas"></canvas>
     <script src="/socket.io/socket.io.js"></script>

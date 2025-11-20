@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skin Library Admin</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 36px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .upload-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .upload-form {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-label {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .file-input-label:hover {
+            background-color: #45a049;
+        }
+
+        .selected-file {
+            color: #555;
+            font-style: italic;
+        }
+
+        .upload-btn {
+            background-color: #667eea;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        .upload-btn:hover {
+            background-color: #5568d3;
+        }
+
+        .upload-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .skin-name-input {
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .skin-name-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .skins-grid {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .skins-grid h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 20px;
+        }
+
+        .skin-card {
+            background: #f9f9f9;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .skin-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .skin-image {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            border-radius: 50%;
+            margin-bottom: 10px;
+            border: 3px solid #667eea;
+        }
+
+        .skin-name {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 10px;
+            word-break: break-word;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .skin-name:hover {
+            color: #667eea;
+        }
+
+        .skin-name.editing {
+            display: none;
+        }
+
+        .skin-name-edit {
+            display: none;
+            width: 100%;
+            padding: 5px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .skin-name-edit.active {
+            display: block;
+        }
+
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background-color 0.3s;
+        }
+
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+            font-style: italic;
+        }
+
+        .back-link {
+            display: inline-block;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            margin-bottom: 20px;
+            transition: background-color 0.3s;
+        }
+
+        .back-link:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/" class="back-link">← Back to Game</a>
+        <h1>Skin Library Administration</h1>
+
+        <div id="messageContainer"></div>
+
+        <div class="upload-section">
+            <h2>Upload New Skin</h2>
+            <form id="uploadForm" class="upload-form">
+                <div class="file-input-wrapper">
+                    <label for="skinFile" class="file-input-label">Choose Image</label>
+                    <input type="file" id="skinFile" accept="image/*" required>
+                </div>
+                <span class="selected-file" id="selectedFileName">No file selected</span>
+                <input type="text" id="skinName" placeholder="Skin name (e.g., 'Smiley Face')" maxlength="50" class="skin-name-input">
+                <button type="submit" class="upload-btn" id="uploadBtn">Upload Skin</button>
+            </form>
+        </div>
+
+        <div class="skins-grid">
+            <h2>Current Skins (<span id="skinCount">0</span>)</h2>
+            <div class="grid" id="skinsContainer">
+                <div class="empty-state">Loading skins...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('skinFile');
+        const selectedFileName = document.getElementById('selectedFileName');
+        const skinNameInput = document.getElementById('skinName');
+        const uploadForm = document.getElementById('uploadForm');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const skinsContainer = document.getElementById('skinsContainer');
+        const skinCount = document.getElementById('skinCount');
+        const messageContainer = document.getElementById('messageContainer');
+
+        // Update selected file name and suggest skin name
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const file = e.target.files[0];
+                selectedFileName.textContent = file.name;
+
+                // Suggest a name from the filename (without extension)
+                const suggestedName = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+                if (!skinNameInput.value) {
+                    skinNameInput.value = suggestedName;
+                }
+            } else {
+                selectedFileName.textContent = 'No file selected';
+            }
+        });
+
+        // Show message
+        function showMessage(text, type) {
+            messageContainer.innerHTML = `<div class="message ${type}">${text}</div>`;
+            setTimeout(() => {
+                messageContainer.innerHTML = '';
+            }, 5000);
+        }
+
+        // Load and display skins
+        async function loadSkins() {
+            try {
+                const response = await fetch('/api/skins');
+                const skins = await response.json();
+
+                skinCount.textContent = skins.length;
+
+                if (skins.length === 0) {
+                    skinsContainer.innerHTML = '<div class="empty-state">No skins uploaded yet. Upload your first skin above!</div>';
+                    return;
+                }
+
+                skinsContainer.innerHTML = skins.map(skin => `
+                    <div class="skin-card" data-filename="${skin.filename}">
+                        <img src="/skins/${skin.filename}" alt="${skin.name}" class="skin-image">
+                        <div class="skin-name" onclick="editSkinName('${skin.filename}')">${skin.name}</div>
+                        <input type="text" class="skin-name-edit" value="${skin.name}"
+                               onblur="saveSkinName('${skin.filename}')"
+                               onkeypress="if(event.key==='Enter') this.blur()">
+                        <button class="delete-btn" onclick="deleteSkin('${skin.filename}')">Delete</button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading skins:', error);
+                skinsContainer.innerHTML = '<div class="empty-state">Error loading skins</div>';
+            }
+        }
+
+        // Upload skin
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const file = fileInput.files[0];
+            if (!file) {
+                showMessage('Please select a file', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('skin', file);
+            formData.append('skinName', skinNameInput.value.trim() || file.name.replace(/\.[^.]+$/, ''));
+
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = 'Uploading...';
+
+            try {
+                const response = await fetch('/api/skins/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    fileInput.value = '';
+                    skinNameInput.value = '';
+                    selectedFileName.textContent = 'No file selected';
+                    loadSkins();
+                } else {
+                    showMessage(result.error || 'Upload failed', 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showMessage('Upload failed: ' + error.message, 'error');
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = 'Upload Skin';
+            }
+        });
+
+        // Edit skin name
+        window.editSkinName = function(filename) {
+            const card = document.querySelector(`.skin-card[data-filename="${filename}"]`);
+            const nameDiv = card.querySelector('.skin-name');
+            const nameInput = card.querySelector('.skin-name-edit');
+
+            nameDiv.classList.add('editing');
+            nameInput.classList.add('active');
+            nameInput.focus();
+            nameInput.select();
+        };
+
+        // Save skin name
+        window.saveSkinName = async function(filename) {
+            const card = document.querySelector(`.skin-card[data-filename="${filename}"]`);
+            const nameDiv = card.querySelector('.skin-name');
+            const nameInput = card.querySelector('.skin-name-edit');
+            const newName = nameInput.value.trim();
+
+            if (!newName) {
+                loadSkins(); // Reset
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/skins/${encodeURIComponent(filename)}/name`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ name: newName })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    nameDiv.textContent = newName;
+                    nameDiv.classList.remove('editing');
+                    nameInput.classList.remove('active');
+                    showMessage('Skin name updated', 'success');
+                } else {
+                    showMessage(result.error || 'Failed to update name', 'error');
+                    loadSkins(); // Reset
+                }
+            } catch (error) {
+                console.error('Error updating skin name:', error);
+                showMessage('Failed to update name', 'error');
+                loadSkins(); // Reset
+            }
+        };
+
+        // Delete skin
+        window.deleteSkin = async function(filename) {
+            if (!confirm(`Are you sure you want to delete "${filename}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/skins/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    loadSkins();
+                } else {
+                    showMessage(result.error || 'Delete failed', 'error');
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+                showMessage('Delete failed: ' + error.message, 'error');
+            }
+        };
+
+        // Load skins on page load
+        loadSkins();
+    </script>
+</body>
+</html>

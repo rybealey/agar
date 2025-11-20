@@ -1,6 +1,6 @@
-# Multiplayer Agar.io Style Game
+# Agar Chungus
 
-A real-time multiplayer web-based game inspired by Agar.io, built with Node.js, Express, Socket.IO, and HTML5 Canvas.
+A real-time multiplayer game built with Node.js, Express, Socket.IO, and HTML5 Canvas.
 
 ## Features
 
@@ -31,8 +31,10 @@ agar/
 ├── package.json        # Node.js dependencies
 ├── package-lock.json
 ├── server.js           # Backend server and game logic
-├── setup.sh            # Automated deployment script (NEW!)
-├── DEPLOYMENT.md       # Detailed deployment guide (NEW!)
+├── setup.sh            # Automated deployment script
+├── deploy.sh           # Quick update/deploy script
+├── DEPLOYMENT.md       # Detailed deployment guide
+├── UPDATE.md           # How to update your deployed game
 ├── Dockerfile          # Docker configuration
 ├── .dockerignore       # Docker ignore file
 └── README.md           # This file
@@ -98,6 +100,33 @@ The script will automatically:
 - Optionally configure UFW firewall
 
 For detailed deployment instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+## Updating Your Deployed Game
+
+After making changes to your code, you need to update the server. See **[UPDATE.md](UPDATE.md)** for detailed instructions.
+
+### Quick Update (Using Git)
+
+```bash
+# On server:
+cd ~/agar
+git pull
+npm install
+pm2 restart agar
+```
+
+### Quick Update (Using Deploy Script)
+
+We've included a one-command deployment script:
+
+```bash
+# On your local machine:
+# 1. Edit deploy.sh with your server details (one-time setup)
+# 2. Run the deploy script:
+./deploy.sh
+```
+
+The script will automatically upload your changes and restart the server!
 
 ## Docker Deployment
 

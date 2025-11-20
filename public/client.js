@@ -8,6 +8,8 @@ let pellets = [];
 let map = { width: 2000, height: 2000 };
 let me = null;
 let gameStarted = false;
+let selectedSkin = 'none'; // Track selected skin
+let skinImages = {}; // Cache loaded skin images
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
@@ -17,10 +19,81 @@ window.addEventListener('resize', () => {
     canvas.height = window.innerHeight;
 });
 
-// Handle name input
+// Load dark mode preference from localStorage
+const darkModeCheckbox = document.getElementById('darkModeCheckbox');
+const savedDarkMode = localStorage.getItem('darkMode');
+if (savedDarkMode === 'true') {
+    document.body.classList.add('dark-mode');
+    darkModeCheckbox.checked = true;
+}
+
+// Save dark mode preference when checkbox changes
+darkModeCheckbox.addEventListener('change', (e) => {
+    localStorage.setItem('darkMode', e.target.checked);
+    if (e.target.checked) {
+        document.body.classList.add('dark-mode');
+    } else {
+        document.body.classList.remove('dark-mode');
+    }
+});
+
+// Handle name input and skin selection
 const nameOverlay = document.getElementById('nameOverlay');
 const nameInput = document.getElementById('nameInput');
 const playButton = document.getElementById('playButton');
+const skinOptions = document.getElementById('skinOptions');
+
+// Load available skins
+async function loadAvailableSkins() {
+    try {
+        const response = await fetch('/api/skins');
+        const skins = await response.json();
+
+        const skinLoader = document.getElementById('skinLoader');
+        skinLoader.remove();
+
+        skins.forEach(skin => {
+            const option = document.createElement('div');
+            option.className = 'skin-option';
+            option.dataset.skin = skin.filename;
+
+            const preview = document.createElement('div');
+            preview.className = 'skin-preview';
+            preview.style.backgroundImage = `url('/skins/${skin.filename}')`;
+
+            const label = document.createElement('div');
+            label.className = 'skin-label';
+            label.textContent = skin.name;
+
+            option.appendChild(preview);
+            option.appendChild(label);
+            skinOptions.appendChild(option);
+        });
+
+        // Select "Random Color" by default
+        document.querySelector('.skin-option[data-skin="none"]').classList.add('selected');
+    } catch (error) {
+        console.error('Error loading skins:', error);
+    }
+}
+
+// Handle skin selection
+skinOptions.addEventListener('click', (e) => {
+    const option = e.target.closest('.skin-option');
+    if (!option) return;
+
+    // Remove previous selection
+    document.querySelectorAll('.skin-option').forEach(opt => {
+        opt.classList.remove('selected');
+    });
+
+    // Add selection to clicked option
+    option.classList.add('selected');
+    selectedSkin = option.dataset.skin;
+});
+
+// Load skins when page loads
+loadAvailableSkins();
 
 function setupSocketListeners() {
     socket.on('init', (data) => {
@@ -60,12 +133,6 @@ function setupSocketListeners() {
 
 function startGame() {
     const playerName = nameInput.value.trim();
-    const darkModeCheckbox = document.getElementById('darkModeCheckbox');
-
-    // Apply dark mode if checked
-    if (darkModeCheckbox.checked) {
-        document.body.classList.add('dark-mode');
-    }
 
     // Connect to server
     socket = io();
@@ -73,9 +140,10 @@ function startGame() {
     // Set up socket event listeners
     setupSocketListeners();
 
-    // Send player name after connection is established (can be empty)
+    // Send player name and skin after connection is established
     socket.on('connect', () => {
         socket.emit('set-name', playerName);
+        socket.emit('set-skin', selectedSkin);
     });
 
     nameOverlay.style.display = 'none';
@@ -100,6 +168,7 @@ function darkenColor(color, percent = 0.3) {
 
 function drawPlayer(player) {
     const borderColor = darkenColor(player.color, 0.3);
+    const hasSkin = player.skin && player.skin !== 'none';
 
     // Draw each blob for this player
     player.blobs.forEach((blob, index) => {
@@ -112,12 +181,53 @@ function drawPlayer(player) {
         ctx.fill();
         ctx.closePath();
 
-        // Draw main blob (slightly smaller to show border)
-        ctx.beginPath();
-        ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
-        ctx.fillStyle = player.color;
-        ctx.fill();
-        ctx.closePath();
+        if (hasSkin) {
+            // Draw image skin
+            if (!skinImages[player.skin]) {
+                // Load image if not cached
+                skinImages[player.skin] = new Image();
+                skinImages[player.skin].src = `/skins/${player.skin}`;
+            }
+
+            const img = skinImages[player.skin];
+            if (img.complete) {
+                // Save context
+                ctx.save();
+
+                // Create circular clipping path
+                ctx.beginPath();
+                ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
+                ctx.closePath();
+                ctx.clip();
+
+                // Draw image to fill the circle
+                const size = (blob.radius - borderWidth) * 2;
+                ctx.drawImage(
+                    img,
+                    blob.x - size / 2,
+                    blob.y - size / 2,
+                    size,
+                    size
+                );
+
+                // Restore context
+                ctx.restore();
+            } else {
+                // Show color while image loads
+                ctx.beginPath();
+                ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
+                ctx.fillStyle = player.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+        } else {
+            // Draw solid color blob (no skin)
+            ctx.beginPath();
+            ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
+            ctx.fillStyle = player.color;
+            ctx.fill();
+            ctx.closePath();
+        }
 
         // Draw player name with white text, black outline, and shadow
         // Show name on all blobs if player has a name
@@ -201,19 +311,36 @@ function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.translate(canvas.width / 2 - centerX, canvas.height / 2 - centerY);
 
-    // Draw grid
+    // Draw infinite grid pattern
     const isDarkMode = document.body.classList.contains('dark-mode');
     ctx.strokeStyle = isDarkMode ? '#333' : '#ddd';
-    for (let x = 0; x <= map.width; x += 50) {
+    ctx.lineWidth = 1;
+
+    const gridSize = 50;
+
+    // Calculate visible area in world coordinates
+    const viewLeft = centerX - canvas.width / 2;
+    const viewRight = centerX + canvas.width / 2;
+    const viewTop = centerY - canvas.height / 2;
+    const viewBottom = centerY + canvas.height / 2;
+
+    // Calculate grid starting positions (use modulo for infinite tiling)
+    const startX = Math.floor(viewLeft / gridSize) * gridSize;
+    const startY = Math.floor(viewTop / gridSize) * gridSize;
+
+    // Draw vertical lines
+    for (let x = startX; x <= viewRight; x += gridSize) {
         ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, map.height);
+        ctx.moveTo(x, viewTop);
+        ctx.lineTo(x, viewBottom);
         ctx.stroke();
     }
-    for (let y = 0; y <= map.height; y += 50) {
+
+    // Draw horizontal lines
+    for (let y = startY; y <= viewBottom; y += gridSize) {
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(map.width, y);
+        ctx.moveTo(viewLeft, y);
+        ctx.lineTo(viewRight, y);
         ctx.stroke();
     }
 

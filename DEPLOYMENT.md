@@ -1,6 +1,6 @@
-# Agar.io Clone - Deployment Guide
+# Agar Chungus - Deployment Guide
 
-This guide will help you deploy the Agar.io clone game on a virtual machine (VM).
+This guide will help you deploy Agar Chungus on a virtual machine (VM).
 
 ## Quick Start
 

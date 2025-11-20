@@ -155,3 +155,157 @@ body.dark-mode #leaderboardList li {
     color: #CD7F32;
     font-weight: bold;
 }
+
+#controls {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid #ddd;
+    font-size: 12px;
+    color: #666;
+}
+
+#controls div {
+    padding: 3px 0;
+}
+
+#controls strong {
+    color: #333;
+    font-weight: bold;
+}
+
+body.dark-mode #controls {
+    border-top-color: #555;
+    color: #aaa;
+}
+
+body.dark-mode #controls strong {
+    color: #fff;
+}
+
+/* Dark mode for name entry screen */
+body.dark-mode #nameOverlay {
+    background-color: rgba(0, 0, 0, 0.9);
+}
+
+body.dark-mode #nameModal {
+    background-color: #2a2a2a;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+}
+
+body.dark-mode #nameModal h1 {
+    color: #fff;
+}
+
+body.dark-mode #nameInput {
+    background-color: #3a3a3a;
+    border-color: #555;
+    color: #fff;
+}
+
+body.dark-mode #nameInput::placeholder {
+    color: #aaa;
+}
+
+body.dark-mode #nameInput:focus {
+    border-color: #4CAF50;
+    background-color: #404040;
+}
+
+body.dark-mode #darkModeToggle label {
+    color: #ccc;
+}
+
+/* Skin Selection Styles */
+#skinSelection {
+    margin: 20px 0;
+}
+
+#skinSelection h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: #333;
+    text-align: center;
+}
+
+body.dark-mode #skinSelection h3 {
+    color: #fff;
+}
+
+#skinOptions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: 10px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 8px;
+}
+
+body.dark-mode #skinOptions {
+    background-color: #3a3a3a;
+}
+
+.skin-option {
+    cursor: pointer;
+    text-align: center;
+    padding: 8px;
+    border: 3px solid transparent;
+    border-radius: 8px;
+    transition: all 0.2s;
+    background-color: white;
+}
+
+body.dark-mode .skin-option {
+    background-color: #4a4a4a;
+}
+
+.skin-option:hover {
+    transform: scale(1.05);
+    border-color: #4CAF50;
+}
+
+.skin-option.selected {
+    border-color: #4CAF50;
+    background-color: #e8f5e9;
+}
+
+body.dark-mode .skin-option.selected {
+    background-color: #2d5a2e;
+}
+
+.skin-preview {
+    width: 50px;
+    height: 50px;
+    margin: 0 auto 5px;
+    border-radius: 50%;
+    border: 2px solid #ddd;
+    background-size: cover;
+    background-position: center;
+}
+
+.color-preview {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+body.dark-mode .skin-preview {
+    border-color: #555;
+}
+
+.skin-label {
+    font-size: 11px;
+    color: #555;
+    word-break: break-word;
+}
+
+body.dark-mode .skin-label {
+    color: #ccc;
+}
+
+#skinLoader {
+    grid-column: 1 / -1;
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    padding: 20px;
+}

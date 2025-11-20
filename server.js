@@ -1,10 +1,45 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
+
+// Configure multer for skin uploads
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const uploadPath = path.join(__dirname, 'public', 'skins');
+        if (!fs.existsSync(uploadPath)) {
+            fs.mkdirSync(uploadPath, { recursive: true });
+        }
+        cb(null, uploadPath);
+    },
+    filename: (req, file, cb) => {
+        // Keep original filename with timestamp prefix to avoid conflicts
+        const uniqueName = Date.now() + '-' + file.originalname;
+        cb(null, uniqueName);
+    }
+});
+
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        const allowedTypes = /jpeg|jpg|png|gif|webp/;
+        const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+        const mimetype = allowedTypes.test(file.mimetype);
+
+        if (extname && mimetype) {
+            return cb(null, true);
+        } else {
+            cb(new Error('Only image files are allowed'));
+        }
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 const MAP_WIDTH = 2000;
@@ -67,6 +102,141 @@ function initFood() {
 
 initFood();
 app.use(express.static('public'));
+app.use(express.json());
+
+// --- Skin Metadata Management ---
+const skinsMetadataPath = path.join(__dirname, 'public', 'skins', 'metadata.json');
+
+function loadSkinsMetadata() {
+    try {
+        if (fs.existsSync(skinsMetadataPath)) {
+            const data = fs.readFileSync(skinsMetadataPath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        console.error('Error loading skins metadata:', err);
+    }
+    return {};
+}
+
+function saveSkinsMetadata(metadata) {
+    try {
+        const skinsDir = path.join(__dirname, 'public', 'skins');
+        if (!fs.existsSync(skinsDir)) {
+            fs.mkdirSync(skinsDir, { recursive: true });
+        }
+        fs.writeFileSync(skinsMetadataPath, JSON.stringify(metadata, null, 2));
+    } catch (err) {
+        console.error('Error saving skins metadata:', err);
+    }
+}
+
+// --- Skin Management API Routes ---
+
+// Get list of available skins with names
+app.get('/api/skins', (req, res) => {
+    const skinsDir = path.join(__dirname, 'public', 'skins');
+
+    if (!fs.existsSync(skinsDir)) {
+        return res.json([]);
+    }
+
+    fs.readdir(skinsDir, (err, files) => {
+        if (err) {
+            console.error('Error reading skins directory:', err);
+            return res.status(500).json({ error: 'Failed to read skins' });
+        }
+
+        // Filter to only image files
+        const imageFiles = files.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+        });
+
+        // Load metadata
+        const metadata = loadSkinsMetadata();
+
+        // Map files to skin objects with names
+        const skins = imageFiles.map(filename => ({
+            filename: filename,
+            name: metadata[filename] || filename.replace(/^\d+-/, '').replace(/\.[^.]+$/, '')
+        }));
+
+        res.json(skins);
+    });
+});
+
+// Upload a new skin
+app.post('/api/skins/upload', (req, res) => {
+    upload.single('skin')(req, res, (err) => {
+        if (err) {
+            console.error('Upload error:', err);
+            return res.status(400).json({ error: err.message || 'Upload failed' });
+        }
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'No file uploaded' });
+        }
+
+        // Save skin name to metadata
+        const skinName = req.body.skinName || req.file.originalname.replace(/\.[^.]+$/, '');
+        const metadata = loadSkinsMetadata();
+        metadata[req.file.filename] = skinName;
+        saveSkinsMetadata(metadata);
+
+        res.json({
+            message: 'Skin uploaded successfully',
+            filename: req.file.filename,
+            name: skinName
+        });
+    });
+});
+
+// Update skin name
+app.put('/api/skins/:filename/name', (req, res) => {
+    const filename = req.params.filename;
+    const newName = req.body.name;
+
+    if (!newName) {
+        return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Security check: ensure filename doesn't contain path traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    const metadata = loadSkinsMetadata();
+    metadata[filename] = newName;
+    saveSkinsMetadata(metadata);
+
+    res.json({ message: 'Skin name updated successfully', name: newName });
+});
+
+// Delete a skin
+app.delete('/api/skins/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, 'public', 'skins', filename);
+
+    // Security check: ensure filename doesn't contain path traversal
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+    }
+
+    fs.unlink(filePath, (err) => {
+        if (err) {
+            console.error('Error deleting file:', err);
+            return res.status(500).json({ error: 'Failed to delete skin' });
+        }
+
+        // Remove from metadata
+        const metadata = loadSkinsMetadata();
+        delete metadata[filename];
+        saveSkinsMetadata(metadata);
+
+        res.json({ message: 'Skin deleted successfully' });
+    });
+});
 
 // --- WebSocket Connection Handling ---
 io.on('connection', (socket) => {
@@ -78,12 +248,13 @@ io.on('connection', (socket) => {
         id: socket.id,
         name: '',
         color: getRandomColor(),
+        skin: 'none', // Default to no skin
         blobs: [{
             id: 0,
             x: startPos.x,
             y: startPos.y,
             radius: PLAYER_START_RADIUS,
-            speed: 4,
+            speed: Math.max(0.5, 4 - PLAYER_START_RADIUS / 40),
             targetX: startPos.x,
             targetY: startPos.y,
         }],
@@ -120,6 +291,13 @@ io.on('connection', (socket) => {
         player.name = name || '';
     });
 
+    // Handle player skin selection
+    socket.on('set-skin', (skin) => {
+        const player = players[socket.id];
+        if (!player) return;
+        player.skin = skin || 'none';
+    });
+
     // Handle split
     socket.on('split', () => {
         const player = players[socket.id];
@@ -146,7 +324,7 @@ io.on('connection', (socket) => {
                 x: blob.x + Math.cos(angle) * offset,
                 y: blob.y + Math.sin(angle) * offset,
                 radius: newRadius,
-                speed: Math.max(1, 4 - newRadius / 100),
+                speed: Math.max(0.5, 4 - newRadius / 40),
                 targetX: blob.targetX,
                 targetY: blob.targetY,
                 splitVelocityX: Math.cos(angle) * SPLIT_VELOCITY,
@@ -157,7 +335,7 @@ io.on('connection', (socket) => {
                 x: blob.x - Math.cos(angle) * offset,
                 y: blob.y - Math.sin(angle) * offset,
                 radius: newRadius,
-                speed: Math.max(1, 4 - newRadius / 100),
+                speed: Math.max(0.5, 4 - newRadius / 40),
                 targetX: blob.targetX,
                 targetY: blob.targetY,
                 splitVelocityX: -Math.cos(angle) * SPLIT_VELOCITY,
@@ -209,7 +387,7 @@ io.on('connection', (socket) => {
 
             // Reduce blob size
             blob.radius = getRadiusAfterEjection(blob.radius, MASS_PERCENT);
-            blob.speed = Math.max(1, 4 - blob.radius / 100);
+            blob.speed = Math.max(0.5, 4 - blob.radius / 40);
         });
     });
 
@@ -291,7 +469,7 @@ setInterval(() => {
                 x: centerX,
                 y: centerY,
                 radius: newRadius,
-                speed: Math.max(1, 4 - newRadius / 100),
+                speed: Math.max(0.5, 4 - newRadius / 40),
                 targetX: player.blobs[0].targetX,
                 targetY: player.blobs[0].targetY,
             }];
@@ -345,7 +523,7 @@ setInterval(() => {
                 const dist = Math.hypot(blob.x - f.x, blob.y - f.y);
                 if (dist < blob.radius) {
                     blob.radius = getNewRadius(blob.radius, f.radius);
-                    blob.speed = Math.max(1, 4 - blob.radius / 100);
+                    blob.speed = Math.max(0.5, 4 - blob.radius / 40);
                     food.splice(i, 1);
                     food.push({ id: `f${Date.now()}`, ...getRandomPosition(5), radius: 5, color: getRandomColor() });
                 }
@@ -357,7 +535,7 @@ setInterval(() => {
                 const dist = Math.hypot(blob.x - pellet.x, blob.y - pellet.y);
                 if (dist < blob.radius) {
                     blob.radius = getNewRadius(blob.radius, pellet.radius);
-                    blob.speed = Math.max(1, 4 - blob.radius / 100);
+                    blob.speed = Math.max(0.5, 4 - blob.radius / 40);
                     pellets.splice(i, 1);
                 }
             }
@@ -377,7 +555,7 @@ setInterval(() => {
                     if (dist < blob.radius && blob.radius > otherBlob.radius * 1.1) {
                         // This blob eats other blob
                         blob.radius = getNewRadius(blob.radius, otherBlob.radius);
-                        blob.speed = Math.max(1, 4 - blob.radius / 100);
+                        blob.speed = Math.max(0.5, 4 - blob.radius / 40);
                         otherPlayer.blobs.splice(otherBlobIdx, 1);
 
                         // If other player has no blobs left, they're eliminated

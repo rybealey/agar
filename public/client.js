@@ -59,7 +59,13 @@ function setupSocketListeners() {
 }
 
 function startGame() {
-    const playerName = nameInput.value.trim() || 'Anonymous';
+    const playerName = nameInput.value.trim();
+    const darkModeCheckbox = document.getElementById('darkModeCheckbox');
+
+    // Apply dark mode if checked
+    if (darkModeCheckbox.checked) {
+        document.body.classList.add('dark-mode');
+    }
 
     // Connect to server
     socket = io();
@@ -67,7 +73,7 @@ function startGame() {
     // Set up socket event listeners
     setupSocketListeners();
 
-    // Send player name after connection is established
+    // Send player name after connection is established (can be empty)
     socket.on('connect', () => {
         socket.emit('set-name', playerName);
     });
@@ -114,8 +120,8 @@ function drawPlayer(player) {
         ctx.closePath();
 
         // Draw player name with white text, black outline, and shadow
-        // Only show name on the first/largest blob
-        if (index === 0 && player.name) {
+        // Show name on all blobs if player has a name
+        if (player.name) {
             const fontSize = Math.max(10, Math.min(30, blob.radius * 0.4));
             ctx.font = `bold ${fontSize}px Arial`;
             ctx.textAlign = 'center';
@@ -175,7 +181,8 @@ function updateLeaderboard() {
     leaderboardList.innerHTML = sortedPlayers.map((player, index) => {
         const isYou = socket && player.id === socket.id;
         const youFlag = isYou ? ' <strong>(You)</strong>' : '';
-        return `<li>${player.name}${youFlag}</li>`;
+        const displayName = player.name || 'Unnamed Player';
+        return `<li>${displayName}${youFlag}</li>`;
     }).join('');
 }
 
@@ -195,7 +202,8 @@ function draw() {
     ctx.translate(canvas.width / 2 - centerX, canvas.height / 2 - centerY);
 
     // Draw grid
-    ctx.strokeStyle = '#ddd';
+    const isDarkMode = document.body.classList.contains('dark-mode');
+    ctx.strokeStyle = isDarkMode ? '#333' : '#ddd';
     for (let x = 0; x <= map.width; x += 50) {
         ctx.beginPath();
         ctx.moveTo(x, 0);

@@ -76,7 +76,7 @@ io.on('connection', (socket) => {
     const startPos = getRandomPosition(PLAYER_START_RADIUS);
     players[socket.id] = {
         id: socket.id,
-        name: 'Anonymous',
+        name: '',
         color: getRandomColor(),
         blobs: [{
             id: 0,
@@ -117,7 +117,7 @@ io.on('connection', (socket) => {
     socket.on('set-name', (name) => {
         const player = players[socket.id];
         if (!player) return;
-        player.name = name || 'Anonymous';
+        player.name = name || '';
     });
 
     // Handle split
@@ -126,6 +126,8 @@ io.on('connection', (socket) => {
         if (!player || player.blobs.length >= 16) return; // Max 16 blobs
 
         const newBlobs = [];
+        const SPLIT_VELOCITY = 20; // Initial split velocity
+
         player.blobs.forEach(blob => {
             if (blob.radius < 15) return; // Too small to split
 
@@ -137,7 +139,7 @@ io.on('connection', (socket) => {
             const dy = blob.targetY - blob.y;
             const angle = Math.atan2(dy, dx);
 
-            // Create two new blobs
+            // Create two new blobs with velocity
             const offset = newRadius * 1.5;
             newBlobs.push({
                 id: Date.now() + Math.random(),
@@ -147,6 +149,8 @@ io.on('connection', (socket) => {
                 speed: Math.max(1, 4 - newRadius / 100),
                 targetX: blob.targetX,
                 targetY: blob.targetY,
+                splitVelocityX: Math.cos(angle) * SPLIT_VELOCITY,
+                splitVelocityY: Math.sin(angle) * SPLIT_VELOCITY,
             });
             newBlobs.push({
                 id: Date.now() + Math.random() + 0.1,
@@ -156,6 +160,8 @@ io.on('connection', (socket) => {
                 speed: Math.max(1, 4 - newRadius / 100),
                 targetX: blob.targetX,
                 targetY: blob.targetY,
+                splitVelocityX: -Math.cos(angle) * SPLIT_VELOCITY,
+                splitVelocityY: -Math.sin(angle) * SPLIT_VELOCITY,
             });
         });
 
@@ -237,6 +243,23 @@ setInterval(() => {
     // Move all blobs toward their targets
     for (const player of allPlayers) {
         player.blobs.forEach(blob => {
+            // Apply split velocity if present
+            if (blob.splitVelocityX !== undefined && blob.splitVelocityY !== undefined) {
+                blob.x += blob.splitVelocityX;
+                blob.y += blob.splitVelocityY;
+
+                // Decay split velocity
+                blob.splitVelocityX *= 0.85;
+                blob.splitVelocityY *= 0.85;
+
+                // Remove velocity when it becomes negligible
+                if (Math.abs(blob.splitVelocityX) < 0.1 && Math.abs(blob.splitVelocityY) < 0.1) {
+                    delete blob.splitVelocityX;
+                    delete blob.splitVelocityY;
+                }
+            }
+
+            // Normal movement toward target
             const dx = blob.targetX - blob.x;
             const dy = blob.targetY - blob.y;
             const dist = Math.hypot(dx, dy);
@@ -245,15 +268,15 @@ setInterval(() => {
                 const angle = Math.atan2(dy, dx);
                 blob.x += Math.cos(angle) * blob.speed;
                 blob.y += Math.sin(angle) * blob.speed;
-
-                // Clamp position to map boundaries
-                blob.x = Math.max(blob.radius, Math.min(MAP_WIDTH - blob.radius, blob.x));
-                blob.y = Math.max(blob.radius, Math.min(MAP_HEIGHT - blob.radius, blob.y));
             }
+
+            // Clamp position to map boundaries
+            blob.x = Math.max(blob.radius, Math.min(MAP_WIDTH - blob.radius, blob.x));
+            blob.y = Math.max(blob.radius, Math.min(MAP_HEIGHT - blob.radius, blob.y));
         });
 
-        // Auto-merge after 90 seconds
-        if (player.splitTime && Date.now() - player.splitTime > 90000 && player.blobs.length > 1) {
+        // Auto-merge after 60 seconds
+        if (player.splitTime && Date.now() - player.splitTime > 60000 && player.blobs.length > 1) {
             // Calculate total mass
             const totalArea = player.blobs.reduce((sum, blob) => sum + Math.PI * blob.radius * blob.radius, 0);
             const newRadius = Math.sqrt(totalArea / Math.PI);
@@ -273,6 +296,41 @@ setInterval(() => {
                 targetY: player.blobs[0].targetY,
             }];
             player.splitTime = null;
+        }
+
+        // Blob repulsion - prevent same-player blobs from overlapping (except when merging)
+        const isMerging = player.splitTime && Date.now() - player.splitTime > 59000; // Last 1 second allows overlap
+
+        if (!isMerging && player.blobs.length > 1) {
+            for (let i = 0; i < player.blobs.length; i++) {
+                for (let j = i + 1; j < player.blobs.length; j++) {
+                    const blob1 = player.blobs[i];
+                    const blob2 = player.blobs[j];
+
+                    const dx = blob2.x - blob1.x;
+                    const dy = blob2.y - blob1.y;
+                    const dist = Math.hypot(dx, dy);
+                    const minDist = blob1.radius + blob2.radius;
+
+                    // If overlapping, push them apart
+                    if (dist < minDist && dist > 0) {
+                        const overlap = minDist - dist;
+                        const pushX = (dx / dist) * overlap * 0.5;
+                        const pushY = (dy / dist) * overlap * 0.5;
+
+                        blob1.x -= pushX;
+                        blob1.y -= pushY;
+                        blob2.x += pushX;
+                        blob2.y += pushY;
+
+                        // Keep within bounds
+                        blob1.x = Math.max(blob1.radius, Math.min(MAP_WIDTH - blob1.radius, blob1.x));
+                        blob1.y = Math.max(blob1.radius, Math.min(MAP_HEIGHT - blob1.radius, blob1.y));
+                        blob2.x = Math.max(blob2.radius, Math.min(MAP_WIDTH - blob2.radius, blob2.x));
+                        blob2.y = Math.max(blob2.radius, Math.min(MAP_HEIGHT - blob2.radius, blob2.y));
+                    }
+                }
+            }
         }
     }
 

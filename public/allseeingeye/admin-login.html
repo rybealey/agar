@@ -212,7 +212,7 @@
 
                 if (data.authenticated) {
                     // Already logged in, redirect to admin panel
-                    window.location.href = '/admin.html';
+                    window.location.href = '/allseeingeye/admin.html';
                 }
             } catch (error) {
                 console.error('Error checking auth:', error);
@@ -275,7 +275,7 @@
 
                     // Redirect to admin panel
                     setTimeout(() => {
-                        window.location.href = '/admin.html';
+                        window.location.href = '/allseeingeye/admin.html';
                     }, 1000);
                 } else {
                     showMessage(result.error || 'Login failed', 'error');

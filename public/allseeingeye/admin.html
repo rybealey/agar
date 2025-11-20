@@ -884,7 +884,7 @@
                 const data = await response.json();
 
                 if (!data.authenticated) {
-                    window.location.href = '/admin-login.html';
+                    window.location.href = '/allseeingeye/admin-login.html';
                     return;
                 }
 
@@ -902,7 +902,7 @@
                 startDashboardRefresh();
             } catch (error) {
                 console.error('Error checking auth:', error);
-                window.location.href = '/admin-login.html';
+                window.location.href = '/allseeingeye/admin-login.html';
             }
         }
 
@@ -1313,7 +1313,7 @@
 
                 if (response.ok) {
                     stopDashboardRefresh();
-                    window.location.href = '/admin-login.html';
+                    window.location.href = '/allseeingeye/admin-login.html';
                 } else {
                     showMessage('Logout failed', 'error');
                 }

@@ -303,7 +303,7 @@ io.on('connection', (socket) => {
             x: startPos.x,
             y: startPos.y,
             radius: PLAYER_START_RADIUS,
-            speed: Math.max(0.5, 4 - PLAYER_START_RADIUS / 40),
+            speed: Math.max(1.0, 8 - PLAYER_START_RADIUS / 20),
             targetX: startPos.x,
             targetY: startPos.y,
         }],
@@ -373,7 +373,7 @@ io.on('connection', (socket) => {
                 x: blob.x + Math.cos(angle) * offset,
                 y: blob.y + Math.sin(angle) * offset,
                 radius: newRadius,
-                speed: Math.max(0.5, 4 - newRadius / 40),
+                speed: Math.max(1.0, 8 - newRadius / 20),
                 targetX: blob.targetX,
                 targetY: blob.targetY,
                 splitVelocityX: Math.cos(angle) * SPLIT_VELOCITY,
@@ -384,7 +384,7 @@ io.on('connection', (socket) => {
                 x: blob.x - Math.cos(angle) * offset,
                 y: blob.y - Math.sin(angle) * offset,
                 radius: newRadius,
-                speed: Math.max(0.5, 4 - newRadius / 40),
+                speed: Math.max(1.0, 8 - newRadius / 20),
                 targetX: blob.targetX,
                 targetY: blob.targetY,
                 splitVelocityX: -Math.cos(angle) * SPLIT_VELOCITY,
@@ -436,7 +436,7 @@ io.on('connection', (socket) => {
 
             // Reduce blob size
             blob.radius = getRadiusAfterEjection(blob.radius, MASS_PERCENT);
-            blob.speed = Math.max(0.5, 4 - blob.radius / 40);
+            blob.speed = Math.max(1.0, 8 - blob.radius / 20);
         });
     });
 
@@ -518,7 +518,7 @@ setInterval(() => {
                 x: centerX,
                 y: centerY,
                 radius: newRadius,
-                speed: Math.max(0.5, 4 - newRadius / 40),
+                speed: Math.max(1.0, 8 - newRadius / 20),
                 targetX: player.blobs[0].targetX,
                 targetY: player.blobs[0].targetY,
             }];
@@ -576,7 +576,7 @@ setInterval(() => {
 
                 if (distSq < blobRadiusSq) {
                     blob.radius = getNewRadius(blob.radius, f.radius);
-                    blob.speed = Math.max(0.5, 4 - blob.radius / 40);
+                    blob.speed = Math.max(1.0, 8 - blob.radius / 20);
                     food.splice(i, 1);
                     // Respawn with random size
                     const newRadius = getRandomFoodSize();
@@ -593,7 +593,7 @@ setInterval(() => {
 
                 if (distSq < blobRadiusSq) {
                     blob.radius = getNewRadius(blob.radius, pellet.radius);
-                    blob.speed = Math.max(0.5, 4 - blob.radius / 40);
+                    blob.speed = Math.max(1.0, 8 - blob.radius / 20);
                     pellets.splice(i, 1);
                 }
             }
@@ -615,7 +615,7 @@ setInterval(() => {
                     if (dist < blob.radius && blob.radius > otherBlob.radius * 1.1) {
                         // This blob eats other blob
                         blob.radius = getNewRadius(blob.radius, otherBlob.radius);
-                        blob.speed = Math.max(0.5, 4 - blob.radius / 40);
+                        blob.speed = Math.max(1.0, 8 - blob.radius / 20);
                         otherPlayer.blobs.splice(otherBlobIdx, 1);
 
                         // If other player has no blobs left, they're eliminated

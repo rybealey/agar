@@ -4,6 +4,8 @@ const socketIo = require('socket.io');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcrypt');
+const session = require('express-session');
 
 const app = express();
 const server = http.createServer(app);
@@ -42,15 +44,26 @@ const upload = multer({
 });
 
 const PORT = process.env.PORT || 3000;
-const MAP_WIDTH = 2000;
-const MAP_HEIGHT = 2000;
-const FOOD_COUNT = 150;
+let MAP_WIDTH = 2000;
+let MAP_HEIGHT = 2000;
+let FOOD_COUNT = 150;
 const PLAYER_START_RADIUS = 20;
+
+// Server start time for uptime tracking
+const serverStartTime = Date.now();
 
 let players = {};
 let food = [];
 let pellets = [];
 let pelletIdCounter = 0;
+
+// Server announcement
+let serverAnnouncement = {
+    message: '',
+    enabled: false,
+    updatedAt: null,
+    updatedBy: null
+};
 
 // --- Game Helper Functions ---
 function getRandomColor() {
@@ -129,8 +142,400 @@ if (!fs.existsSync(skinsDir)) {
     }
 }
 
+// Session configuration
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'agar-admin-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: false, // Set to true if using HTTPS
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+}));
+
 app.use(express.static('public'));
 app.use(express.json());
+
+// --- Admin Authentication ---
+const adminsFilePath = path.join(__dirname, 'admins.json');
+
+// Initialize admin credentials file if it doesn't exist
+function initAdminsFile() {
+    if (!fs.existsSync(adminsFilePath)) {
+        // Create default admin account (username: admin, password: admin123)
+        // IMPORTANT: Change this password immediately after first login!
+        const defaultPassword = 'admin123';
+        const hashedPassword = bcrypt.hashSync(defaultPassword, 10);
+
+        const defaultAdmins = {
+            'admin': {
+                username: 'admin',
+                passwordHash: hashedPassword,
+                createdAt: new Date().toISOString()
+            }
+        };
+
+        fs.writeFileSync(adminsFilePath, JSON.stringify(defaultAdmins, null, 2));
+        console.log('Created default admin account (username: admin, password: admin123)');
+        console.log('IMPORTANT: Change the default password immediately!');
+    }
+}
+
+initAdminsFile();
+
+function loadAdmins() {
+    try {
+        if (fs.existsSync(adminsFilePath)) {
+            const data = fs.readFileSync(adminsFilePath, 'utf8');
+            return JSON.parse(data);
+        }
+    } catch (err) {
+        console.error('Error loading admins:', err);
+    }
+    return {};
+}
+
+function saveAdmins(admins) {
+    try {
+        fs.writeFileSync(adminsFilePath, JSON.stringify(admins, null, 2));
+    } catch (err) {
+        console.error('Error saving admins:', err);
+    }
+}
+
+// Authentication middleware
+function requireAuth(req, res, next) {
+    if (req.session && req.session.adminUsername) {
+        return next();
+    }
+    return res.status(401).json({ error: 'Unauthorized. Please login.' });
+}
+
+// --- Authentication Routes ---
+
+// Check authentication status
+app.get('/api/auth/status', (req, res) => {
+    if (req.session && req.session.adminUsername) {
+        res.json({ authenticated: true, username: req.session.adminUsername });
+    } else {
+        res.json({ authenticated: false });
+    }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    const admins = loadAdmins();
+    const admin = admins[username];
+
+    if (!admin) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    try {
+        const passwordMatch = await bcrypt.compare(password, admin.passwordHash);
+
+        if (passwordMatch) {
+            req.session.adminUsername = username;
+            res.json({ success: true, username: username });
+        } else {
+            res.status(401).json({ error: 'Invalid credentials' });
+        }
+    } catch (err) {
+        console.error('Login error:', err);
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({ error: 'Logout failed' });
+        }
+        res.json({ success: true });
+    });
+});
+
+// Change password endpoint (requires authentication)
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+        return res.status(400).json({ error: 'Current and new password required' });
+    }
+
+    if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'New password must be at least 6 characters' });
+    }
+
+    const username = req.session.adminUsername;
+    const admins = loadAdmins();
+    const admin = admins[username];
+
+    try {
+        const passwordMatch = await bcrypt.compare(currentPassword, admin.passwordHash);
+
+        if (!passwordMatch) {
+            return res.status(401).json({ error: 'Current password is incorrect' });
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        admins[username].passwordHash = hashedPassword;
+        admins[username].lastPasswordChange = new Date().toISOString();
+        saveAdmins(admins);
+
+        res.json({ success: true, message: 'Password changed successfully' });
+    } catch (err) {
+        console.error('Password change error:', err);
+        res.status(500).json({ error: 'Failed to change password' });
+    }
+});
+
+// --- Admin Management Routes ---
+
+// List all admin accounts (protected)
+app.get('/api/admins', requireAuth, (req, res) => {
+    const admins = loadAdmins();
+    const adminList = Object.values(admins).map(admin => ({
+        username: admin.username,
+        createdAt: admin.createdAt,
+        lastPasswordChange: admin.lastPasswordChange
+    }));
+    res.json(adminList);
+});
+
+// Add new admin account (protected)
+app.post('/api/admins', requireAuth, async (req, res) => {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    if (username.length < 3) {
+        return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    const admins = loadAdmins();
+
+    if (admins[username]) {
+        return res.status(400).json({ error: 'Username already exists' });
+    }
+
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        admins[username] = {
+            username: username,
+            passwordHash: hashedPassword,
+            createdAt: new Date().toISOString()
+        };
+        saveAdmins(admins);
+
+        res.json({ success: true, message: 'Admin account created successfully' });
+    } catch (err) {
+        console.error('Error creating admin:', err);
+        res.status(500).json({ error: 'Failed to create admin account' });
+    }
+});
+
+// Delete admin account (protected)
+app.delete('/api/admins/:username', requireAuth, (req, res) => {
+    const usernameToDelete = req.params.username;
+    const currentUsername = req.session.adminUsername;
+
+    // Prevent deleting your own account
+    if (usernameToDelete === currentUsername) {
+        return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+
+    const admins = loadAdmins();
+
+    if (!admins[usernameToDelete]) {
+        return res.status(404).json({ error: 'Admin account not found' });
+    }
+
+    delete admins[usernameToDelete];
+    saveAdmins(admins);
+
+    res.json({ success: true, message: 'Admin account deleted successfully' });
+});
+
+// --- Server Statistics Routes ---
+
+// Get server statistics (protected)
+app.get('/api/stats', requireAuth, (req, res) => {
+    const uptime = Date.now() - serverStartTime;
+    const activePlayers = Object.keys(players).length;
+
+    // Count total skins
+    const skinsDir = path.join(__dirname, 'public', 'skins');
+    let totalSkins = 0;
+    if (fs.existsSync(skinsDir)) {
+        const files = fs.readdirSync(skinsDir);
+        totalSkins = files.filter(file => {
+            const ext = path.extname(file).toLowerCase();
+            return ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+        }).length;
+    }
+
+    res.json({
+        uptime: uptime,
+        uptimeFormatted: formatUptime(uptime),
+        activePlayers: activePlayers,
+        totalSkins: totalSkins,
+        totalFood: food.length,
+        totalPellets: pellets.length,
+        mapWidth: MAP_WIDTH,
+        mapHeight: MAP_HEIGHT,
+        configuredFoodCount: FOOD_COUNT
+    });
+});
+
+// Get active players list (protected)
+app.get('/api/players', requireAuth, (req, res) => {
+    const playersList = Object.values(players).map(player => ({
+        id: player.id,
+        name: player.name || 'Anonymous',
+        blobCount: player.blobs.length,
+        totalMass: player.blobs.reduce((sum, blob) => sum + (Math.PI * blob.radius * blob.radius), 0),
+        skin: player.skin
+    })).sort((a, b) => b.totalMass - a.totalMass);
+
+    res.json(playersList);
+});
+
+// --- Game Configuration Routes ---
+
+// Get game configuration (protected)
+app.get('/api/config', requireAuth, (req, res) => {
+    res.json({
+        mapWidth: MAP_WIDTH,
+        mapHeight: MAP_HEIGHT,
+        foodCount: FOOD_COUNT
+    });
+});
+
+// Update game configuration (protected)
+app.put('/api/config', requireAuth, (req, res) => {
+    const { mapWidth, mapHeight, foodCount } = req.body;
+
+    if (mapWidth !== undefined) {
+        if (mapWidth < 1000 || mapWidth > 10000) {
+            return res.status(400).json({ error: 'Map width must be between 1000 and 10000' });
+        }
+        MAP_WIDTH = parseInt(mapWidth);
+    }
+
+    if (mapHeight !== undefined) {
+        if (mapHeight < 1000 || mapHeight > 10000) {
+            return res.status(400).json({ error: 'Map height must be between 1000 and 10000' });
+        }
+        MAP_HEIGHT = parseInt(mapHeight);
+    }
+
+    if (foodCount !== undefined) {
+        if (foodCount < 50 || foodCount > 1000) {
+            return res.status(400).json({ error: 'Food count must be between 50 and 1000' });
+        }
+        FOOD_COUNT = parseInt(foodCount);
+
+        // Adjust current food
+        while (food.length < FOOD_COUNT) {
+            const radius = getRandomFoodSize();
+            food.push({ id: `f${Date.now()}${Math.random()}`, ...getRandomPosition(radius), radius: radius, color: getRandomColor() });
+        }
+        while (food.length > FOOD_COUNT) {
+            food.pop();
+        }
+    }
+
+    res.json({
+        success: true,
+        message: 'Configuration updated successfully',
+        config: {
+            mapWidth: MAP_WIDTH,
+            mapHeight: MAP_HEIGHT,
+            foodCount: FOOD_COUNT
+        }
+    });
+});
+
+// Helper function to format uptime
+function formatUptime(ms) {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+        return `${days}d ${hours % 24}h ${minutes % 60}m`;
+    } else if (hours > 0) {
+        return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+    } else {
+        return `${seconds}s`;
+    }
+}
+
+// --- Server Announcement Routes ---
+
+// Get current announcement (public - no auth required)
+app.get('/api/announcement', (req, res) => {
+    res.json(serverAnnouncement);
+});
+
+// Set announcement (protected)
+app.post('/api/announcement', requireAuth, (req, res) => {
+    const { message, enabled } = req.body;
+
+    if (message !== undefined) {
+        serverAnnouncement.message = message.trim();
+    }
+
+    if (enabled !== undefined) {
+        serverAnnouncement.enabled = Boolean(enabled);
+    }
+
+    serverAnnouncement.updatedAt = new Date().toISOString();
+    serverAnnouncement.updatedBy = req.session.adminUsername;
+
+    // Broadcast announcement to all connected clients
+    io.emit('announcement', serverAnnouncement);
+
+    res.json({
+        success: true,
+        message: 'Announcement updated successfully',
+        announcement: serverAnnouncement
+    });
+});
+
+// Clear announcement (protected)
+app.delete('/api/announcement', requireAuth, (req, res) => {
+    serverAnnouncement.message = '';
+    serverAnnouncement.enabled = false;
+    serverAnnouncement.updatedAt = new Date().toISOString();
+    serverAnnouncement.updatedBy = req.session.adminUsername;
+
+    // Broadcast cleared announcement to all connected clients
+    io.emit('announcement', serverAnnouncement);
+
+    res.json({
+        success: true,
+        message: 'Announcement cleared successfully'
+    });
+});
 
 // --- Skin Metadata Management ---
 const skinsMetadataPath = path.join(__dirname, 'public', 'skins', 'metadata.json');
@@ -185,17 +590,19 @@ app.get('/api/skins', (req, res) => {
         const metadata = loadSkinsMetadata();
 
         // Map files to skin objects with names
-        const skins = imageFiles.map(filename => ({
-            filename: filename,
-            name: metadata[filename] || filename.replace(/^\d+-/, '').replace(/\.[^.]+$/, '')
-        }));
+        const skins = imageFiles.map(filename => {
+            return {
+                filename: filename,
+                name: metadata[filename] || filename.replace(/^\d+-/, '').replace(/\.[^.]+$/, '')
+            };
+        });
 
         res.json(skins);
     });
 });
 
-// Upload a new skin
-app.post('/api/skins/upload', (req, res) => {
+// Upload a new skin (protected)
+app.post('/api/skins/upload', requireAuth, (req, res) => {
     console.log('Received upload request');
 
     upload.single('skin')(req, res, (err) => {
@@ -241,8 +648,8 @@ app.post('/api/skins/upload', (req, res) => {
     });
 });
 
-// Update skin name
-app.put('/api/skins/:filename/name', (req, res) => {
+// Update skin name (protected)
+app.put('/api/skins/:filename/name', requireAuth, (req, res) => {
     const filename = req.params.filename;
     const newName = req.body.name;
 
@@ -262,8 +669,8 @@ app.put('/api/skins/:filename/name', (req, res) => {
     res.json({ message: 'Skin name updated successfully', name: newName });
 });
 
-// Delete a skin
-app.delete('/api/skins/:filename', (req, res) => {
+// Delete a skin (protected)
+app.delete('/api/skins/:filename', requireAuth, (req, res) => {
     const filename = req.params.filename;
     const filePath = path.join(__dirname, 'public', 'skins', filename);
 
@@ -317,6 +724,9 @@ io.on('connection', (socket) => {
         pellets,
         map: { width: MAP_WIDTH, height: MAP_HEIGHT }
     });
+
+    // Send current announcement to the new player
+    socket.emit('announcement', serverAnnouncement);
 
     // Broadcast new player to all other players
     socket.broadcast.emit('player-joined', players[socket.id]);

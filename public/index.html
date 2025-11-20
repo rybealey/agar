@@ -43,6 +43,15 @@
             <div><strong>W:</strong> Eject Mass</div>
         </div>
     </div>
+    <div id="serverAnnouncement" style="display: none;">
+        <span id="announcementText"></span>
+    </div>
+    <div id="deathOverlay" style="display: none;">
+        <div id="deathModal">
+            <h1 id="deathTitle">You Were Eaten!</h1>
+            <p id="deathMessage">Rejoining in <span id="countdown">3</span> seconds...</p>
+        </div>
+    </div>
     <canvas id="gameCanvas"></canvas>
     <script src="/socket.io/socket.io.js"></script>
     <script src="client.js"></script>

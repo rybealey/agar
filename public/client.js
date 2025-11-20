@@ -151,12 +151,52 @@ function setupSocketListeners() {
 
     socket.on('player-eaten', ({ eatenId }) => {
         if (eatenId === socket.id) {
-            // You were eaten
-            alert("You were eaten!");
-            socket.disconnect();
-            document.body.innerHTML = '<h1>Game Over. Refresh to play again.</h1>';
+            // You were eaten - show countdown and auto-refresh
+            showDeathScreen();
         }
     });
+
+    // Handle server announcements
+    socket.on('announcement', (announcement) => {
+        const announcementDiv = document.getElementById('serverAnnouncement');
+        const announcementText = document.getElementById('announcementText');
+
+        if (announcement.enabled && announcement.message) {
+            announcementText.textContent = announcement.message;
+            announcementDiv.style.display = 'block';
+        } else {
+            announcementDiv.style.display = 'none';
+        }
+    });
+}
+
+// Death screen with countdown and auto-refresh
+function showDeathScreen() {
+    const deathOverlay = document.getElementById('deathOverlay');
+    const countdownEl = document.getElementById('countdown');
+
+    // Disconnect socket
+    if (socket) {
+        socket.disconnect();
+    }
+
+    // Show death overlay
+    deathOverlay.style.display = 'flex';
+
+    // Countdown from 3 to 0
+    let countdown = 3;
+    countdownEl.textContent = countdown;
+
+    const countdownInterval = setInterval(() => {
+        countdown--;
+        if (countdown > 0) {
+            countdownEl.textContent = countdown;
+        } else {
+            clearInterval(countdownInterval);
+            // Reload the page
+            window.location.reload();
+        }
+    }, 1000);
 }
 
 function startGame() {

@@ -1,2 +1,8 @@
 instruct
 node_modules
+admins.json
+public/skins/*.png
+public/skins/*.jpg
+public/skins/*.jpeg
+public/skins/*.gif
+public/skins/*.webp

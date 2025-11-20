@@ -1,0 +1,18 @@
+{
+  "name": "agar",
+  "version": "1.0.0",
+  "description": "A multiplayer Agar.io-style game built with Node.js, Express, Socket.IO, and HTML5 Canvas",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["game", "multiplayer", "agar.io", "websocket", "canvas"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1"
+  }
+}

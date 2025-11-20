@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agar.io Clone</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="nameOverlay">
+        <div id="nameModal">
+            <h1>Enter Your Name</h1>
+            <input type="text" id="nameInput" placeholder="Your name" maxlength="15" autofocus>
+            <button id="playButton">Play</button>
+        </div>
+    </div>
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <ol id="leaderboardList"></ol>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>

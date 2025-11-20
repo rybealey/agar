@@ -1,11 +1,12 @@
 {
   "name": "agar-chungus",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Agar Chungus - A multiplayer game built with Node.js, Express, Socket.IO, and HTML5 Canvas",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "version": "echo $npm_package_version"
   },
   "keywords": [
     "game",

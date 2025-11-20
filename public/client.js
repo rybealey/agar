@@ -10,6 +10,7 @@ let me = null;
 let gameStarted = false;
 let selectedSkin = 'none'; // Track selected skin
 let skinImages = {}; // Cache loaded skin images
+let preloadedSkins = new Set(); // Track which skins have been preloaded
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
@@ -43,6 +44,24 @@ const nameInput = document.getElementById('nameInput');
 const playButton = document.getElementById('playButton');
 const skinOptions = document.getElementById('skinOptions');
 
+// Preload skin image
+function preloadSkinImage(filename) {
+    if (!filename || filename === 'none' || preloadedSkins.has(filename)) {
+        return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+        skinImages[filename] = img;
+        preloadedSkins.add(filename);
+    };
+    img.onerror = () => {
+        console.error(`Failed to load skin: ${filename}`);
+        preloadedSkins.add(filename); // Mark as attempted
+    };
+    img.src = `/skins/${filename}`;
+}
+
 // Load available skins
 async function loadAvailableSkins() {
     try {
@@ -68,6 +87,9 @@ async function loadAvailableSkins() {
             option.appendChild(preview);
             option.appendChild(label);
             skinOptions.appendChild(option);
+
+            // Preload skin images in background
+            preloadSkinImage(skin.filename);
         });
 
         // Select "Random Color" by default
@@ -170,6 +192,11 @@ function drawPlayer(player) {
     const borderColor = darkenColor(player.color, 0.3);
     const hasSkin = player.skin && player.skin !== 'none';
 
+    // Preload skin if not already loaded
+    if (hasSkin && !preloadedSkins.has(player.skin)) {
+        preloadSkinImage(player.skin);
+    }
+
     // Draw each blob for this player
     player.blobs.forEach((blob, index) => {
         const borderWidth = Math.max(3, blob.radius * 0.08);
@@ -181,47 +208,33 @@ function drawPlayer(player) {
         ctx.fill();
         ctx.closePath();
 
-        if (hasSkin) {
-            // Draw image skin
-            if (!skinImages[player.skin]) {
-                // Load image if not cached
-                skinImages[player.skin] = new Image();
-                skinImages[player.skin].src = `/skins/${player.skin}`;
-            }
-
+        if (hasSkin && skinImages[player.skin] && skinImages[player.skin].complete) {
+            // Draw image skin - only if preloaded and ready
             const img = skinImages[player.skin];
-            if (img.complete) {
-                // Save context
-                ctx.save();
 
-                // Create circular clipping path
-                ctx.beginPath();
-                ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
-                ctx.closePath();
-                ctx.clip();
+            // Save context
+            ctx.save();
 
-                // Draw image to fill the circle
-                const size = (blob.radius - borderWidth) * 2;
-                ctx.drawImage(
-                    img,
-                    blob.x - size / 2,
-                    blob.y - size / 2,
-                    size,
-                    size
-                );
+            // Create circular clipping path
+            ctx.beginPath();
+            ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
+            ctx.closePath();
+            ctx.clip();
 
-                // Restore context
-                ctx.restore();
-            } else {
-                // Show color while image loads
-                ctx.beginPath();
-                ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
-                ctx.fillStyle = player.color;
-                ctx.fill();
-                ctx.closePath();
-            }
+            // Draw image to fill the circle
+            const size = (blob.radius - borderWidth) * 2;
+            ctx.drawImage(
+                img,
+                blob.x - size / 2,
+                blob.y - size / 2,
+                size,
+                size
+            );
+
+            // Restore context
+            ctx.restore();
         } else {
-            // Draw solid color blob (no skin)
+            // Draw solid color blob (no skin or skin loading)
             ctx.beginPath();
             ctx.arc(blob.x, blob.y, blob.radius - borderWidth, 0, Math.PI * 2);
             ctx.fillStyle = player.color;
@@ -277,7 +290,17 @@ function drawPellet(p) {
     ctx.closePath();
 }
 
+// Throttle leaderboard updates
+let lastLeaderboardUpdate = 0;
+const LEADERBOARD_UPDATE_INTERVAL = 500; // Update every 500ms
+
 function updateLeaderboard() {
+    const now = Date.now();
+    if (now - lastLeaderboardUpdate < LEADERBOARD_UPDATE_INTERVAL) {
+        return;
+    }
+    lastLeaderboardUpdate = now;
+
     const leaderboardList = document.getElementById('leaderboardList');
 
     // Calculate total mass for each player (all their blobs combined)
@@ -296,6 +319,14 @@ function updateLeaderboard() {
     }).join('');
 }
 
+// Helper to check if object is in viewport
+function isInViewport(x, y, radius, viewLeft, viewRight, viewTop, viewBottom) {
+    return x + radius >= viewLeft &&
+           x - radius <= viewRight &&
+           y + radius >= viewTop &&
+           y - radius <= viewBottom;
+}
+
 function draw() {
     if (!me) {
         requestAnimationFrame(draw);
@@ -311,44 +342,63 @@ function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.translate(canvas.width / 2 - centerX, canvas.height / 2 - centerY);
 
-    // Draw infinite grid pattern
+    // Calculate visible area in world coordinates with padding
+    const padding = 100; // Extra padding to avoid pop-in
+    const viewLeft = centerX - canvas.width / 2 - padding;
+    const viewRight = centerX + canvas.width / 2 + padding;
+    const viewTop = centerY - canvas.height / 2 - padding;
+    const viewBottom = centerY + canvas.height / 2 + padding;
+
+    // Draw infinite grid pattern (batched for performance)
     const isDarkMode = document.body.classList.contains('dark-mode');
     ctx.strokeStyle = isDarkMode ? '#333' : '#ddd';
     ctx.lineWidth = 1;
 
     const gridSize = 50;
 
-    // Calculate visible area in world coordinates
-    const viewLeft = centerX - canvas.width / 2;
-    const viewRight = centerX + canvas.width / 2;
-    const viewTop = centerY - canvas.height / 2;
-    const viewBottom = centerY + canvas.height / 2;
-
     // Calculate grid starting positions (use modulo for infinite tiling)
     const startX = Math.floor(viewLeft / gridSize) * gridSize;
     const startY = Math.floor(viewTop / gridSize) * gridSize;
 
+    // Batch all grid lines into one path for better performance
+    ctx.beginPath();
+
     // Draw vertical lines
     for (let x = startX; x <= viewRight; x += gridSize) {
-        ctx.beginPath();
         ctx.moveTo(x, viewTop);
         ctx.lineTo(x, viewBottom);
-        ctx.stroke();
     }
 
     // Draw horizontal lines
     for (let y = startY; y <= viewBottom; y += gridSize) {
-        ctx.beginPath();
         ctx.moveTo(viewLeft, y);
         ctx.lineTo(viewRight, y);
-        ctx.stroke();
     }
 
-    // Draw game objects
-    food.forEach(drawFood);
-    pellets.forEach(drawPellet);
+    ctx.stroke();
+
+    // Draw game objects (only if in viewport)
+    food.forEach(f => {
+        if (isInViewport(f.x, f.y, f.radius, viewLeft, viewRight, viewTop, viewBottom)) {
+            drawFood(f);
+        }
+    });
+
+    pellets.forEach(p => {
+        if (isInViewport(p.x, p.y, p.radius, viewLeft, viewRight, viewTop, viewBottom)) {
+            drawPellet(p);
+        }
+    });
+
     for (const id in players) {
-        drawPlayer(players[id]);
+        const player = players[id];
+        // Check if any blob is in viewport
+        const hasVisibleBlob = player.blobs.some(blob =>
+            isInViewport(blob.x, blob.y, blob.radius, viewLeft, viewRight, viewTop, viewBottom)
+        );
+        if (hasVisibleBlob) {
+            drawPlayer(player);
+        }
     }
 
     // Update leaderboard

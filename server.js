@@ -516,12 +516,16 @@ setInterval(() => {
     for (const player of allPlayers) {
         for (let blobIdx = 0; blobIdx < player.blobs.length; blobIdx++) {
             const blob = player.blobs[blobIdx];
+            const blobRadiusSq = blob.radius * blob.radius; // Pre-calculate for performance
 
-            // Food collision
+            // Food collision - optimized with squared distance
             for (let i = food.length - 1; i >= 0; i--) {
                 const f = food[i];
-                const dist = Math.hypot(blob.x - f.x, blob.y - f.y);
-                if (dist < blob.radius) {
+                const dx = blob.x - f.x;
+                const dy = blob.y - f.y;
+                const distSq = dx * dx + dy * dy;
+
+                if (distSq < blobRadiusSq) {
                     blob.radius = getNewRadius(blob.radius, f.radius);
                     blob.speed = Math.max(0.5, 4 - blob.radius / 40);
                     food.splice(i, 1);
@@ -529,11 +533,14 @@ setInterval(() => {
                 }
             }
 
-            // Pellet collision
+            // Pellet collision - optimized with squared distance
             for (let i = pellets.length - 1; i >= 0; i--) {
                 const pellet = pellets[i];
-                const dist = Math.hypot(blob.x - pellet.x, blob.y - pellet.y);
-                if (dist < blob.radius) {
+                const dx = blob.x - pellet.x;
+                const dy = blob.y - pellet.y;
+                const distSq = dx * dx + dy * dy;
+
+                if (distSq < blobRadiusSq) {
                     blob.radius = getNewRadius(blob.radius, pellet.radius);
                     blob.speed = Math.max(0.5, 4 - blob.radius / 40);
                     pellets.splice(i, 1);
@@ -550,7 +557,9 @@ setInterval(() => {
 
                 for (let otherBlobIdx = otherPlayer.blobs.length - 1; otherBlobIdx >= 0; otherBlobIdx--) {
                     const otherBlob = otherPlayer.blobs[otherBlobIdx];
-                    const dist = Math.hypot(blob.x - otherBlob.x, blob.y - otherBlob.y);
+                    const dx = blob.x - otherBlob.x;
+                    const dy = blob.y - otherBlob.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
 
                     if (dist < blob.radius && blob.radius > otherBlob.radius * 1.1) {
                         // This blob eats other blob
@@ -571,7 +580,7 @@ setInterval(() => {
 
     // Broadcast game state to all clients
     io.emit('update', { players, food, pellets });
-}, 1000 / 60); // 60 FPS
+}, 1000 / 30); // 30 FPS server updates (client interpolates)
 
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

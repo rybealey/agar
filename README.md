@@ -4,12 +4,19 @@ A real-time multiplayer web-based game inspired by Agar.io, built with Node.js, 
 
 ## Features
 
-- Real-time multiplayer gameplay using WebSockets
-- Smooth HTML5 Canvas rendering with camera following player
-- Collision detection for food and player interactions
-- Dynamic player growth mechanics
-- Docker containerization for easy deployment
-- 60 FPS game loop for smooth gameplay
+- **Real-time multiplayer** gameplay using WebSockets
+- **Smooth HTML5 Canvas** rendering with camera following player
+- **Split mechanics** - Press spacebar to split into multiple blobs (max 16)
+- **Mass ejection** - Press W to eject mass pellets
+- **Auto-merge** - Split blobs automatically merge after 60 seconds
+- **Dynamic split velocity** - Blobs shoot apart when splitting for exciting action
+- **Blob repulsion physics** - Prevents same-player blobs from overlapping
+- **Dark mode** toggle on the start screen
+- **Customizable player names** (optional)
+- **Leaderboard** showing top 10 players in real-time
+- **Collision detection** for food and player interactions
+- **Docker containerization** for easy deployment
+- **60 FPS game loop** for smooth gameplay
 
 ## Project Structure
 
@@ -17,13 +24,15 @@ A real-time multiplayer web-based game inspired by Agar.io, built with Node.js, 
 agar/
 ├── node_modules/
 ├── public/
-│   ├── index.html      # Main HTML page
-│   ├── style.css       # Styling for fullscreen canvas
+│   ├── index.html      # Main HTML page with name input and dark mode
+│   ├── style.css       # Styling for UI and dark mode
 │   └── client.js       # Client-side game logic and rendering
 ├── instruct/           # Instruction files
 ├── package.json        # Node.js dependencies
 ├── package-lock.json
 ├── server.js           # Backend server and game logic
+├── setup.sh            # Automated deployment script (NEW!)
+├── DEPLOYMENT.md       # Detailed deployment guide (NEW!)
 ├── Dockerfile          # Docker configuration
 ├── .dockerignore       # Docker ignore file
 └── README.md           # This file
@@ -62,10 +71,33 @@ You can open multiple browser tabs or windows to test multiplayer functionality.
 
 ## Game Controls
 
-- **Mouse Movement**: Move your mouse to control your player's direction
+- **Mouse**: Move your blob(s) toward cursor position
+- **Spacebar**: Split your blob into smaller pieces (maximum 16 blobs)
+- **W**: Eject mass pellets (3% of your mass)
 - **Objective**: Eat food (small colored circles) to grow larger
-- **PvP**: Eat smaller players to grow even more (must be 10% larger)
+- **PvP**: Eat smaller players to grow even more (must be 10% larger to consume)
 - **Warning**: Larger players can eat you if you're smaller!
+
+## Automated VM Deployment
+
+**NEW!** We've included an automated setup script for easy VM deployment.
+
+### Quick Deploy
+
+```bash
+# Upload files to your VM and run:
+chmod +x setup.sh
+./setup.sh
+```
+
+The script will automatically:
+- Install Node.js (if needed)
+- Install npm dependencies
+- Optionally set up PM2 for production
+- Optionally configure Nginx as reverse proxy
+- Optionally configure UFW firewall
+
+For detailed deployment instructions, see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
 ## Docker Deployment
 

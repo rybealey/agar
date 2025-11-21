@@ -1323,7 +1323,7 @@ setInterval(() => {
         radius: coinRadius,
         value: 50, // 50 coins
     });
-}, 30000); // Spawn a coin every 30 seconds
+}, 180000); // Spawn a coin every 3 minutes
 
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

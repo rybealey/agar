@@ -5,7 +5,6 @@ let socket = null;
 let players = {};
 let food = {};
 let pellets = [];
-let spikes = [];
 let coinDrops = [];
 let map = { width: 2000, height: 2000 };
 let me = null;
@@ -196,7 +195,6 @@ function setupSocketListeners() {
         players = data.players;
         food = data.food;
         pellets = data.pellets || [];
-        spikes = data.spikes || [];
         coinDrops = data.coinDrops || [];
         map = data.map;
         me = players[socket.id];
@@ -206,7 +204,6 @@ function setupSocketListeners() {
         players = data.players;
         food = data.food;
         pellets = data.pellets || [];
-        spikes = data.spikes || [];
         coinDrops = data.coinDrops || [];
         if (players[socket.id]) {
             me = players[socket.id];
@@ -238,6 +235,39 @@ function setupSocketListeners() {
             announcementDiv.style.display = 'block';
         } else {
             announcementDiv.style.display = 'none';
+        }
+    });
+
+    // Handle coin collection with animation
+    socket.on('coin-collected', ({ amount }) => {
+        const userCoinsEl = document.getElementById('userCoins');
+        if (userCoinsEl) {
+            // Parse current coin amount
+            const currentText = userCoinsEl.textContent;
+            const currentCoins = parseInt(currentText.match(/\d+/)?.[0] || '0');
+            const newCoins = currentCoins + amount;
+
+            // Update the coin display
+            userCoinsEl.textContent = `${newCoins} 🪙`;
+
+            // Add animation class
+            userCoinsEl.classList.add('coin-increase');
+
+            // Create floating +amount indicator
+            const indicator = document.createElement('div');
+            indicator.className = 'coin-indicator';
+            indicator.textContent = `+${amount}`;
+            userCoinsEl.parentElement.appendChild(indicator);
+
+            // Remove animation class after animation completes
+            setTimeout(() => {
+                userCoinsEl.classList.remove('coin-increase');
+            }, 500);
+
+            // Remove floating indicator after animation
+            setTimeout(() => {
+                indicator.remove();
+            }, 1000);
         }
     });
 }
@@ -417,44 +447,6 @@ function drawPellet(p) {
     ctx.closePath();
 }
 
-function drawSpike(s) {
-    const numSpikes = 20;
-    const spikeLength = s.radius * 0.4;
-
-    // Draw green spiky circle
-    ctx.beginPath();
-    for (let i = 0; i < numSpikes; i++) {
-        const angle = (Math.PI * 2 * i) / numSpikes;
-        const nextAngle = (Math.PI * 2 * (i + 1)) / numSpikes;
-
-        // Inner point (on the circle)
-        const innerX = s.x + Math.cos(angle) * s.radius;
-        const innerY = s.y + Math.sin(angle) * s.radius;
-
-        // Spike tip (extending outward)
-        const midAngle = (angle + nextAngle) / 2;
-        const tipX = s.x + Math.cos(midAngle) * (s.radius + spikeLength);
-        const tipY = s.y + Math.sin(midAngle) * (s.radius + spikeLength);
-
-        if (i === 0) {
-            ctx.moveTo(innerX, innerY);
-        } else {
-            ctx.lineTo(innerX, innerY);
-        }
-        ctx.lineTo(tipX, tipY);
-    }
-    ctx.closePath();
-
-    // Fill with bright green
-    ctx.fillStyle = '#00ff00';
-    ctx.fill();
-
-    // Add darker green border
-    ctx.strokeStyle = '#00cc00';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-}
-
 function drawCoinDrop(coin) {
     // Draw 💰 emoji
     const fontSize = coin.radius * 2.5;
@@ -561,12 +553,6 @@ function draw() {
     pellets.forEach(p => {
         if (isInViewport(p.x, p.y, p.radius, viewLeft, viewRight, viewTop, viewBottom)) {
             drawPellet(p);
-        }
-    });
-
-    spikes.forEach(s => {
-        if (isInViewport(s.x, s.y, s.radius, viewLeft, viewRight, viewTop, viewBottom)) {
-            drawSpike(s);
         }
     });
 

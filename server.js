@@ -49,6 +49,8 @@ let MAP_WIDTH = 2000;
 let MAP_HEIGHT = 2000;
 let FOOD_COUNT = 150;
 const PLAYER_START_RADIUS = 20;
+const SPIKE_COUNT = 15;
+const SPIKE_RADIUS = 40;
 
 // Server start time for uptime tracking
 const serverStartTime = Date.now();
@@ -57,6 +59,7 @@ let players = {};
 let food = [];
 let pellets = [];
 let pelletIdCounter = 0;
+let spikes = [];
 
 // Server announcement
 let serverAnnouncement = {
@@ -130,7 +133,19 @@ function initFood() {
     }
 }
 
+function initSpikes() {
+    for (let i = 0; i < SPIKE_COUNT; i++) {
+        spikes.push({
+            id: `s${i}`,
+            ...getRandomPosition(SPIKE_RADIUS),
+            radius: SPIKE_RADIUS,
+            mass: Math.PI * SPIKE_RADIUS * SPIKE_RADIUS, // Mass based on area
+        });
+    }
+}
+
 initFood();
+initSpikes();
 
 // Ensure skins directory exists at startup
 const skinsDir = path.join(__dirname, 'public', 'skins');
@@ -938,6 +953,7 @@ io.on('connection', (socket) => {
         players,
         food,
         pellets,
+        spikes,
         map: { width: MAP_WIDTH, height: MAP_HEIGHT }
     });
 
@@ -1249,6 +1265,58 @@ setInterval(() => {
                     pellets.splice(i, 1);
                 }
             }
+
+            // Spike collision
+            for (const spike of spikes) {
+                const dx = blob.x - spike.x;
+                const dy = blob.y - spike.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // Check if blob is touching spike
+                if (dist < blob.radius + spike.radius) {
+                    const blobMass = Math.PI * blob.radius * blob.radius;
+
+                    // If blob is bigger than spike, it bursts into pieces
+                    if (blobMass > spike.mass) {
+                        // Blob gains some mass from spike
+                        const newBlobMass = blobMass + spike.mass * 0.2; // Gain 20% of spike mass
+                        const newRadius = Math.sqrt(newBlobMass / Math.PI);
+
+                        // Split the blob into multiple pieces (similar to space bar split)
+                        const numPieces = 8; // Split into 8 pieces
+                        const pieceArea = (Math.PI * newRadius * newRadius) / numPieces;
+                        const pieceRadius = Math.sqrt(pieceArea / Math.PI);
+
+                        // Remove the original blob
+                        player.blobs.splice(blobIdx, 1);
+                        blobIdx--; // Adjust index since we removed current blob
+
+                        // Create new blob pieces radiating outward
+                        for (let i = 0; i < numPieces; i++) {
+                            const angle = (Math.PI * 2 * i) / numPieces;
+                            const splitDistance = 15;
+
+                            player.blobs.push({
+                                id: player.blobs.length,
+                                x: blob.x + Math.cos(angle) * splitDistance,
+                                y: blob.y + Math.sin(angle) * splitDistance,
+                                radius: pieceRadius,
+                                speed: Math.max(1.0, 8 - pieceRadius / 20),
+                                targetX: blob.targetX,
+                                targetY: blob.targetY,
+                                splitVelocityX: Math.cos(angle) * 12,
+                                splitVelocityY: Math.sin(angle) * 12,
+                            });
+                        }
+
+                        // Set split time
+                        player.splitTime = Date.now();
+
+                        break; // Stop checking other spikes for this blob (it's gone)
+                    }
+                    // If blob is smaller, it can hide under the spike (no collision effect)
+                }
+            }
         }
 
         // Player blob collision with other players' blobs
@@ -1282,7 +1350,7 @@ setInterval(() => {
     }
 
     // Broadcast game state to all clients
-    io.emit('update', { players, food, pellets });
+    io.emit('update', { players, food, pellets, spikes });
 }, 1000 / 30); // 30 FPS server updates (client interpolates)
 
 server.listen(PORT, () => {

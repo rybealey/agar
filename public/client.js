@@ -5,6 +5,7 @@ let socket = null;
 let players = {};
 let food = {};
 let pellets = [];
+let spikes = [];
 let map = { width: 2000, height: 2000 };
 let me = null;
 let gameStarted = false;
@@ -194,6 +195,7 @@ function setupSocketListeners() {
         players = data.players;
         food = data.food;
         pellets = data.pellets || [];
+        spikes = data.spikes || [];
         map = data.map;
         me = players[socket.id];
     });
@@ -202,6 +204,7 @@ function setupSocketListeners() {
         players = data.players;
         food = data.food;
         pellets = data.pellets || [];
+        spikes = data.spikes || [];
         if (players[socket.id]) {
             me = players[socket.id];
         }
@@ -411,6 +414,44 @@ function drawPellet(p) {
     ctx.closePath();
 }
 
+function drawSpike(s) {
+    const numSpikes = 20;
+    const spikeLength = s.radius * 0.4;
+
+    // Draw green spiky circle
+    ctx.beginPath();
+    for (let i = 0; i < numSpikes; i++) {
+        const angle = (Math.PI * 2 * i) / numSpikes;
+        const nextAngle = (Math.PI * 2 * (i + 1)) / numSpikes;
+
+        // Inner point (on the circle)
+        const innerX = s.x + Math.cos(angle) * s.radius;
+        const innerY = s.y + Math.sin(angle) * s.radius;
+
+        // Spike tip (extending outward)
+        const midAngle = (angle + nextAngle) / 2;
+        const tipX = s.x + Math.cos(midAngle) * (s.radius + spikeLength);
+        const tipY = s.y + Math.sin(midAngle) * (s.radius + spikeLength);
+
+        if (i === 0) {
+            ctx.moveTo(innerX, innerY);
+        } else {
+            ctx.lineTo(innerX, innerY);
+        }
+        ctx.lineTo(tipX, tipY);
+    }
+    ctx.closePath();
+
+    // Fill with bright green
+    ctx.fillStyle = '#00ff00';
+    ctx.fill();
+
+    // Add darker green border
+    ctx.strokeStyle = '#00cc00';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+}
+
 // Throttle leaderboard updates
 let lastLeaderboardUpdate = 0;
 const LEADERBOARD_UPDATE_INTERVAL = 500; // Update every 500ms
@@ -508,6 +549,12 @@ function draw() {
     pellets.forEach(p => {
         if (isInViewport(p.x, p.y, p.radius, viewLeft, viewRight, viewTop, viewBottom)) {
             drawPellet(p);
+        }
+    });
+
+    spikes.forEach(s => {
+        if (isInViewport(s.x, s.y, s.radius, viewLeft, viewRight, viewTop, viewBottom)) {
+            drawSpike(s);
         }
     });
 

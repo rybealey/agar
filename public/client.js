@@ -96,6 +96,16 @@ async function loadAvailableSkins() {
         const skinLoader = document.getElementById('skinLoader');
         skinLoader.remove();
 
+        // Show/hide account promo based on authentication
+        const accountPromo = document.getElementById('accountPromo');
+        if (accountPromo) {
+            if (userAuthenticated) {
+                accountPromo.style.display = 'none';
+            } else {
+                accountPromo.style.display = 'block';
+            }
+        }
+
         // For guests: remove custom color option, only allow random color
         if (!userAuthenticated) {
             const customColorOption = document.querySelector('.skin-option[data-skin="custom"]');

@@ -272,7 +272,7 @@
                 // Load owned skins
                 const ownedResponse = await fetch('/api/user/skins');
                 const ownedData = await ownedResponse.json();
-                ownedSkins = new Set(ownedData.skins.map(s => s.filename));
+                ownedSkins = new Set(ownedData.skins);
 
                 // Load all skins
                 const skinsResponse = await fetch('/api/skins');

@@ -87,7 +87,7 @@ async function loadAvailableSkins() {
                 // Fetch owned skins
                 const skinsResponse = await fetch('/api/user/skins');
                 const skinsData = await skinsResponse.json();
-                ownedSkins = new Set(skinsData.skins.map(s => s.filename));
+                ownedSkins = new Set(skinsData.skins);
             }
         } catch (error) {
             // User not authenticated, continue as guest

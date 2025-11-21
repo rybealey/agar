@@ -20,6 +20,7 @@
   "type": "commonjs",
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "better-sqlite3": "^11.10.0",
     "express": "^5.1.0",
     "express-session": "^1.18.2",
     "multer": "^2.0.2",

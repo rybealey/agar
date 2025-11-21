@@ -692,6 +692,7 @@
             <div class="tab-buttons">
                 <button class="tab-button active" onclick="switchTab('dashboard')">Dashboard</button>
                 <button class="tab-button" onclick="switchTab('skins')">Skins</button>
+                <button class="tab-button" onclick="switchTab('users')">Users</button>
                 <button class="tab-button" onclick="switchTab('admins')">Admins</button>
                 <button class="tab-button" onclick="switchTab('settings')">Settings</button>
             </div>
@@ -780,6 +781,53 @@
                     <h2>Current Skins (<span id="skinCount">0</span>)</h2>
                     <div class="grid" id="skinsContainer">
                         <div class="empty-state">Loading skins...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div class="tab-content" id="users-tab">
+                <h2 style="margin-bottom: 20px; color: #333;">User Management</h2>
+
+                <div class="admin-list">
+                    <h3>Registered Users</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Email</th>
+                                <th>Coins</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: #999;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 40px;">
+                    <h3>Skin Pricing</h3>
+                    <p style="color: #666; margin-bottom: 15px;">Set prices for skins to make them available for purchase by players.</p>
+
+                    <div class="admin-list">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Skin Name</th>
+                                    <th>Price (coins)</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="skinPricingTableBody">
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #999;">Loading...</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -894,6 +942,7 @@
                 // Load initial tab
                 loadDashboard();
                 loadSkins();
+                loadUsers();
                 loadAdmins();
                 loadConfig();
                 loadAnnouncement();
@@ -925,6 +974,10 @@
             } else {
                 stopDashboardRefresh();
                 if (tabName === 'skins') loadSkins();
+                if (tabName === 'users') {
+                    loadUsers();
+                    loadSkinPricing();
+                }
                 if (tabName === 'admins') loadAdmins();
                 if (tabName === 'settings') loadConfig();
             }
@@ -1254,6 +1307,174 @@
             } catch (error) {
                 console.error('Error deleting admin:', error);
                 showMessage('Failed to delete admin: ' + error.message, 'error');
+            }
+        };
+
+        // === USERS ===
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/users');
+                const data = await response.json();
+
+                const tbody = document.getElementById('usersTableBody');
+                if (data.users.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">No registered users</td></tr>';
+                } else {
+                    tbody.innerHTML = data.users.map(user => `
+                        <tr>
+                            <td>${user.email}</td>
+                            <td>${user.coins} 🪙</td>
+                            <td>${new Date(user.created_at).toLocaleDateString()}</td>
+                            <td>
+                                <button class="btn-primary" style="padding: 6px 12px; font-size: 13px;" onclick="giveCoins(${user.id}, '${user.email}')">Give Coins</button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading users:', error);
+                showMessage('Failed to load users', 'error');
+            }
+        }
+
+        window.giveCoins = async function(userId, userEmail) {
+            const amount = prompt(`How many coins do you want to give to ${userEmail}?`, '100');
+            if (amount === null) return;
+
+            const coins = parseInt(amount);
+            if (isNaN(coins) || coins < 0) {
+                showMessage('Invalid coin amount', 'error');
+                return;
+            }
+
+            try {
+                // Get current coins first
+                const usersResponse = await fetch('/api/users');
+                const usersData = await usersResponse.json();
+                const user = usersData.users.find(u => u.id === userId);
+                const newTotal = user.coins + coins;
+
+                const response = await fetch(`/api/users/${userId}/coins`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ coins: newTotal })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(`${coins} coins given to ${userEmail}`, 'success');
+                    loadUsers();
+                } else {
+                    showMessage(result.error || 'Failed to update coins', 'error');
+                }
+            } catch (error) {
+                console.error('Error giving coins:', error);
+                showMessage('Failed to give coins: ' + error.message, 'error');
+            }
+        };
+
+        async function loadSkinPricing() {
+            try {
+                // Get all skins first
+                const skinsResponse = await fetch('/api/skins');
+                const skins = await skinsResponse.json();
+
+                // Get current prices
+                const pricesResponse = await fetch('/api/skin-prices');
+                const data = await pricesResponse.json();
+                const prices = data.prices || [];
+
+                const priceMap = {};
+                prices.forEach(p => {
+                    priceMap[p.filename] = p;
+                });
+
+                const tbody = document.getElementById('skinPricingTableBody');
+                if (skins.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #999;">No skins available</td></tr>';
+                } else {
+                    tbody.innerHTML = skins.map(skin => {
+                        const priceInfo = priceMap[skin.filename];
+                        const isForSale = priceInfo && priceInfo.for_sale;
+                        const price = priceInfo ? priceInfo.price : 0;
+
+                        return `
+                            <tr>
+                                <td>${skin.name}</td>
+                                <td>
+                                    <input type="number" value="${price}" min="0" id="price-${skin.filename}" style="width: 100px; padding: 5px;">
+                                </td>
+                                <td>
+                                    <span style="color: ${isForSale ? '#4CAF50' : '#999'};">
+                                        ${isForSale ? '✓ For Sale' : '○ Not For Sale'}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn-primary" style="padding: 6px 12px; font-size: 13px;" onclick="setSkinPrice('${skin.filename}', '${skin.name}')">
+                                        ${isForSale ? 'Update' : 'Set Price'}
+                                    </button>
+                                    ${isForSale ? `<button class="btn-danger" style="padding: 6px 12px; font-size: 13px; margin-left: 5px;" onclick="removeSkinPrice('${skin.filename}')">Remove</button>` : ''}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Error loading skin pricing:', error);
+                showMessage('Failed to load skin pricing', 'error');
+            }
+        }
+
+        window.setSkinPrice = async function(filename, skinName) {
+            const priceInput = document.getElementById(`price-${filename}`);
+            const price = parseInt(priceInput.value);
+
+            if (isNaN(price) || price < 0) {
+                showMessage('Invalid price', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/skin-prices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename, price, forSale: true })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(`${skinName} price set to ${price} coins`, 'success');
+                    loadSkinPricing();
+                } else {
+                    showMessage(result.error || 'Failed to set price', 'error');
+                }
+            } catch (error) {
+                console.error('Error setting price:', error);
+                showMessage('Failed to set price: ' + error.message, 'error');
+            }
+        };
+
+        window.removeSkinPrice = async function(filename) {
+            if (!confirm('Remove this skin from sale?')) return;
+
+            try {
+                const response = await fetch(`/api/skin-prices/${encodeURIComponent(filename)}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    loadSkinPricing();
+                } else {
+                    showMessage(result.error || 'Failed to remove skin', 'error');
+                }
+            } catch (error) {
+                console.error('Error removing skin price:', error);
+                showMessage('Failed to remove skin: ' + error.message, 'error');
             }
         };
 

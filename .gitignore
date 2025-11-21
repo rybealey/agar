@@ -1,6 +1,7 @@
 instruct
 node_modules
 admins.json
+game.db
 public/skins/*.png
 public/skins/*.jpg
 public/skins/*.jpeg

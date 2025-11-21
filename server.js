@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
+const db = require('./database');
 
 const app = express();
 const server = http.createServer(app);
@@ -298,6 +299,139 @@ app.post('/api/auth/change-password', requireAuth, async (req, res) => {
     }
 });
 
+// --- User Authentication Routes ---
+
+// User registration
+app.post('/api/register', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    if (password.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    try {
+        // Check if user already exists
+        const existingUser = db.getUserByEmail(email);
+        if (existingUser) {
+            return res.status(400).json({ error: 'Email already registered' });
+        }
+
+        // Create new user with 100 starting coins
+        const userId = db.createUser(email, password);
+        db.updateUserCoins(userId, 100); // Welcome bonus
+
+        res.json({ success: true, message: 'Registration successful', userId });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Registration failed' });
+    }
+});
+
+// User login
+app.post('/api/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    try {
+        const user = db.getUserByEmail(email);
+
+        if (!user || !db.verifyPassword(user, password)) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        // Store user ID in session
+        req.session.userId = user.id;
+        req.session.userEmail = user.email;
+
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                email: user.email,
+                coins: user.coins
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
+    }
+});
+
+// User logout
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ success: true });
+});
+
+// Get current user info
+app.get('/api/user', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ authenticated: false });
+    }
+
+    const user = db.getUserById(req.session.userId);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+        authenticated: true,
+        user: {
+            id: user.id,
+            email: user.email,
+            coins: user.coins
+        }
+    });
+});
+
+// Get user's owned skins
+app.get('/api/user/skins', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const ownedSkins = db.getUserSkins(req.session.userId);
+    res.json({ skins: ownedSkins });
+});
+
+// Purchase a skin
+app.post('/api/skins/purchase', (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const { filename } = req.body;
+
+    if (!filename) {
+        return res.status(400).json({ error: 'Filename is required' });
+    }
+
+    const skinPrice = db.getSkinPrice(filename);
+    if (!skinPrice || !skinPrice.for_sale) {
+        return res.status(400).json({ error: 'Skin not available for purchase' });
+    }
+
+    const result = db.purchaseSkin(req.session.userId, filename, skinPrice.price);
+
+    if (result.success) {
+        const user = db.getUserById(req.session.userId);
+        res.json({
+            success: true,
+            message: 'Skin purchased successfully',
+            remainingCoins: user.coins
+        });
+    } else {
+        res.status(400).json({ error: result.error });
+    }
+});
+
 // --- Admin Management Routes ---
 
 // List all admin accounts (protected)
@@ -469,6 +603,81 @@ app.put('/api/config', requireAuth, (req, res) => {
             foodCount: FOOD_COUNT
         }
     });
+});
+
+// --- Skin Pricing Management (Admin) ---
+
+// Get all skin prices
+app.get('/api/skin-prices', requireAuth, (req, res) => {
+    const prices = db.getAllSkinPrices();
+    res.json({ prices });
+});
+
+// Set skin price (admin only)
+app.post('/api/skin-prices', requireAuth, (req, res) => {
+    const { filename, price, forSale } = req.body;
+
+    if (!filename || price === undefined) {
+        return res.status(400).json({ error: 'Filename and price are required' });
+    }
+
+    if (price < 0) {
+        return res.status(400).json({ error: 'Price must be non-negative' });
+    }
+
+    try {
+        db.setSkinPrice(filename, price, forSale !== false);
+        res.json({ success: true, message: 'Skin price updated successfully' });
+    } catch (error) {
+        console.error('Error setting skin price:', error);
+        res.status(500).json({ error: 'Failed to set skin price' });
+    }
+});
+
+// Remove skin from sale
+app.delete('/api/skin-prices/:filename', requireAuth, (req, res) => {
+    const filename = req.params.filename;
+
+    try {
+        db.removeSkinPrice(filename);
+        res.json({ success: true, message: 'Skin removed from sale' });
+    } catch (error) {
+        console.error('Error removing skin price:', error);
+        res.status(500).json({ error: 'Failed to remove skin price' });
+    }
+});
+
+// Get all users (admin only)
+app.get('/api/users', requireAuth, (req, res) => {
+    try {
+        const users = db.getAllUsers();
+        res.json({ users });
+    } catch (error) {
+        console.error('Error getting users:', error);
+        res.status(500).json({ error: 'Failed to get users' });
+    }
+});
+
+// Update user coins (admin only)
+app.put('/api/users/:userId/coins', requireAuth, (req, res) => {
+    const userId = parseInt(req.params.userId);
+    const { coins } = req.body;
+
+    if (isNaN(userId) || coins === undefined) {
+        return res.status(400).json({ error: 'Invalid user ID or coins value' });
+    }
+
+    if (coins < 0) {
+        return res.status(400).json({ error: 'Coins must be non-negative' });
+    }
+
+    try {
+        db.updateUserCoins(userId, coins);
+        res.json({ success: true, message: 'User coins updated successfully' });
+    } catch (error) {
+        console.error('Error updating user coins:', error);
+        res.status(500).json({ error: 'Failed to update user coins' });
+    }
 });
 
 // Helper function to format uptime

@@ -6,6 +6,7 @@ let players = {};
 let food = {};
 let pellets = [];
 let spikes = [];
+let coinDrops = [];
 let map = { width: 2000, height: 2000 };
 let me = null;
 let gameStarted = false;
@@ -196,6 +197,7 @@ function setupSocketListeners() {
         food = data.food;
         pellets = data.pellets || [];
         spikes = data.spikes || [];
+        coinDrops = data.coinDrops || [];
         map = data.map;
         me = players[socket.id];
     });
@@ -205,6 +207,7 @@ function setupSocketListeners() {
         food = data.food;
         pellets = data.pellets || [];
         spikes = data.spikes || [];
+        coinDrops = data.coinDrops || [];
         if (players[socket.id]) {
             me = players[socket.id];
         }
@@ -452,6 +455,15 @@ function drawSpike(s) {
     ctx.stroke();
 }
 
+function drawCoinDrop(coin) {
+    // Draw 💰 emoji
+    const fontSize = coin.radius * 2.5;
+    ctx.font = `${fontSize}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💰', coin.x, coin.y);
+}
+
 // Throttle leaderboard updates
 let lastLeaderboardUpdate = 0;
 const LEADERBOARD_UPDATE_INTERVAL = 500; // Update every 500ms
@@ -555,6 +567,12 @@ function draw() {
     spikes.forEach(s => {
         if (isInViewport(s.x, s.y, s.radius, viewLeft, viewRight, viewTop, viewBottom)) {
             drawSpike(s);
+        }
+    });
+
+    coinDrops.forEach(coin => {
+        if (isInViewport(coin.x, coin.y, coin.radius, viewLeft, viewRight, viewTop, viewBottom)) {
+            drawCoinDrop(coin);
         }
     });
 

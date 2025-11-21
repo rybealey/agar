@@ -60,6 +60,8 @@ let food = [];
 let pellets = [];
 let pelletIdCounter = 0;
 let spikes = [];
+let coinDrops = [];
+let coinDropIdCounter = 0;
 
 // Server announcement
 let serverAnnouncement = {
@@ -931,8 +933,10 @@ io.on('connection', (socket) => {
 
     // Create a new player object with multiple blobs support
     const startPos = getRandomPosition(PLAYER_START_RADIUS);
+    const userId = socket.request?.session?.userId; // Get userId from session if authenticated
     players[socket.id] = {
         id: socket.id,
+        userId: userId || null, // Store userId for coin collection
         name: '',
         color: getRandomColor(),
         skin: 'none', // Default to no skin
@@ -954,6 +958,7 @@ io.on('connection', (socket) => {
         food,
         pellets,
         spikes,
+        coinDrops,
         map: { width: MAP_WIDTH, height: MAP_HEIGHT }
     });
 
@@ -1317,6 +1322,24 @@ setInterval(() => {
                     // If blob is smaller, it can hide under the spike (no collision effect)
                 }
             }
+
+            // Coin drop collision - only for authenticated users
+            for (let i = coinDrops.length - 1; i >= 0; i--) {
+                const coin = coinDrops[i];
+                const dx = blob.x - coin.x;
+                const dy = blob.y - coin.y;
+                const distSq = dx * dx + dy * dy;
+
+                if (distSq < blobRadiusSq) {
+                    // Check if player is authenticated
+                    if (player.userId) {
+                        // Give coins to the player
+                        db.addCoinsToUser(player.userId, coin.value);
+                    }
+                    // Remove the coin drop (anyone can collect, but only logged-in users get coins)
+                    coinDrops.splice(i, 1);
+                }
+            }
         }
 
         // Player blob collision with other players' blobs
@@ -1350,8 +1373,19 @@ setInterval(() => {
     }
 
     // Broadcast game state to all clients
-    io.emit('update', { players, food, pellets, spikes });
+    io.emit('update', { players, food, pellets, spikes, coinDrops });
 }, 1000 / 30); // 30 FPS server updates (client interpolates)
+
+// Spawn coin drops periodically
+setInterval(() => {
+    const coinRadius = 15;
+    coinDrops.push({
+        id: `coin${coinDropIdCounter++}`,
+        ...getRandomPosition(coinRadius),
+        radius: coinRadius,
+        value: 50, // 50 coins
+    });
+}, 30000); // Spawn a coin every 30 seconds
 
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

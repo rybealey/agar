@@ -40,6 +40,17 @@
             <button id="playButton">Play</button>
         </div>
     </div>
+    <div id="userInfo">
+        <div id="authLinks" style="display: none;">
+            <a href="/login.html">Login</a> | <a href="/register.html">Register</a>
+        </div>
+        <div id="userDisplay" style="display: none;">
+            <div id="userEmail"></div>
+            <div id="userCoins">0 🪙</div>
+            <button id="shopButton" onclick="window.location.href='/shop.html'">Shop</button>
+            <button id="logoutButton">Logout</button>
+        </div>
+    </div>
     <div id="leaderboard">
         <h2>Leaderboard</h2>
         <ol id="leaderboardList"></ol>

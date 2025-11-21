@@ -511,3 +511,49 @@ window.addEventListener('keydown', (e) => {
         socket.emit('split');
     }
 });
+
+// Authentication UI
+async function checkAuthStatus() {
+    try {
+        const response = await fetch('/api/user');
+        const data = await response.json();
+
+        const authLinks = document.getElementById('authLinks');
+        const userDisplay = document.getElementById('userDisplay');
+
+        if (data.authenticated && data.user) {
+            // User is logged in
+            authLinks.style.display = 'none';
+            userDisplay.style.display = 'block';
+            document.getElementById('userEmail').textContent = data.user.email;
+            document.getElementById('userCoins').textContent = `${data.user.coins} 🪙`;
+        } else {
+            // User is not logged in
+            authLinks.style.display = 'block';
+            userDisplay.style.display = 'none';
+        }
+    } catch (error) {
+        // If error, show login links
+        document.getElementById('authLinks').style.display = 'block';
+        document.getElementById('userDisplay').style.display = 'none';
+    }
+}
+
+// Logout handler
+const logoutButton = document.getElementById('logoutButton');
+if (logoutButton) {
+    logoutButton.addEventListener('click', async () => {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+            window.location.reload();
+        } catch (error) {
+            console.error('Logout failed:', error);
+        }
+    });
+}
+
+// Check auth status on page load
+checkAuthStatus();
+
+// Update coin balance periodically
+setInterval(checkAuthStatus, 30000); // Update every 30 seconds

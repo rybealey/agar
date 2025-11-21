@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skin Shop - Agar Chungus</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .shop-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            padding: 30px;
+        }
+
+        .shop-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #ddd;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .user-balance {
+            font-size: 24px;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .nav-links {
+            margin-bottom: 20px;
+        }
+
+        .nav-links a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+            margin-right: 20px;
+        }
+
+        .nav-links a:hover {
+            text-decoration: underline;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+            display: none;
+        }
+
+        .message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .skins-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+        }
+
+        .skin-card {
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s;
+            border: 3px solid transparent;
+        }
+
+        .skin-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .skin-card.owned {
+            border-color: #4CAF50;
+            background: #e8f5e9;
+        }
+
+        .skin-preview {
+            width: 100px;
+            height: 100px;
+            margin: 0 auto 15px;
+            border-radius: 50%;
+            border: 3px solid #ddd;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .skin-name {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .skin-price {
+            font-size: 18px;
+            color: #FFD700;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .skin-status {
+            font-size: 14px;
+            font-weight: bold;
+            padding: 8px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+
+        .status-owned {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .status-not-for-sale {
+            background-color: #999;
+            color: white;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            font-size: 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-buy {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-buy:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-buy:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+            font-size: 18px;
+        }
+
+        .not-logged-in {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .not-logged-in h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .not-logged-in a {
+            display: inline-block;
+            margin: 10px;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .not-logged-in a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="shop-container">
+        <div class="nav-links">
+            <a href="/">Back to Game</a>
+        </div>
+
+        <div class="shop-header">
+            <h1>Skin Shop</h1>
+            <div class="user-balance" id="userBalance">0 🪙</div>
+        </div>
+
+        <div class="message" id="message"></div>
+
+        <div id="notLoggedIn" class="not-logged-in" style="display: none;">
+            <h2>Please log in to access the shop</h2>
+            <a href="/login.html">Login</a>
+            <a href="/register.html">Register</a>
+        </div>
+
+        <div id="shopContent">
+            <div class="loading" id="loading">Loading skins...</div>
+            <div class="skins-grid" id="skinsGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let ownedSkins = new Set();
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/user');
+                const data = await response.json();
+
+                if (data.authenticated && data.user) {
+                    currentUser = data.user;
+                    document.getElementById('userBalance').textContent = `${data.user.coins} 🪙`;
+                    return true;
+                } else {
+                    document.getElementById('shopContent').style.display = 'none';
+                    document.getElementById('notLoggedIn').style.display = 'block';
+                    return false;
+                }
+            } catch (error) {
+                document.getElementById('shopContent').style.display = 'none';
+                document.getElementById('notLoggedIn').style.display = 'block';
+                return false;
+            }
+        }
+
+        async function loadShop() {
+            const isAuthenticated = await checkAuth();
+            if (!isAuthenticated) return;
+
+            try {
+                // Load owned skins
+                const ownedResponse = await fetch('/api/user/skins');
+                const ownedData = await ownedResponse.json();
+                ownedSkins = new Set(ownedData.skins.map(s => s.filename));
+
+                // Load all skins
+                const skinsResponse = await fetch('/api/skins');
+                const allSkins = await skinsResponse.json();
+
+                // Load skin prices
+                const pricesResponse = await fetch('/api/skin-prices');
+                const pricesData = await pricesResponse.json();
+                const priceMap = {};
+                pricesData.prices.forEach(p => {
+                    priceMap[p.filename] = p;
+                });
+
+                // Hide loading, show grid
+                document.getElementById('loading').style.display = 'none';
+                const grid = document.getElementById('skinsGrid');
+                grid.innerHTML = '';
+
+                allSkins.forEach(skin => {
+                    const priceInfo = priceMap[skin.filename];
+                    const isOwned = ownedSkins.has(skin.filename);
+                    const isForSale = priceInfo && priceInfo.for_sale;
+
+                    const card = document.createElement('div');
+                    card.className = `skin-card ${isOwned ? 'owned' : ''}`;
+
+                    const preview = document.createElement('div');
+                    preview.className = 'skin-preview';
+                    preview.style.backgroundImage = `url('/skins/${skin.filename}')`;
+
+                    const name = document.createElement('div');
+                    name.className = 'skin-name';
+                    name.textContent = skin.name;
+
+                    card.appendChild(preview);
+                    card.appendChild(name);
+
+                    if (isOwned) {
+                        const status = document.createElement('div');
+                        status.className = 'skin-status status-owned';
+                        status.textContent = 'Owned ✓';
+                        card.appendChild(status);
+                    } else if (isForSale) {
+                        const price = document.createElement('div');
+                        price.className = 'skin-price';
+                        price.textContent = `${priceInfo.price} 🪙`;
+                        card.appendChild(price);
+
+                        const button = document.createElement('button');
+                        button.className = 'btn btn-buy';
+                        button.textContent = 'Purchase';
+                        button.disabled = currentUser.coins < priceInfo.price;
+                        button.onclick = () => purchaseSkin(skin.filename, skin.name, priceInfo.price);
+                        card.appendChild(button);
+                    } else {
+                        const status = document.createElement('div');
+                        status.className = 'skin-status status-not-for-sale';
+                        status.textContent = 'Not For Sale';
+                        card.appendChild(status);
+                    }
+
+                    grid.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading shop:', error);
+                showMessage('Failed to load shop. Please try again.', 'error');
+            }
+        }
+
+        async function purchaseSkin(filename, name, price) {
+            if (currentUser.coins < price) {
+                showMessage('Not enough coins!', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/skins/purchase', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(`Successfully purchased ${name}!`, 'success');
+                    currentUser.coins = data.newBalance;
+                    document.getElementById('userBalance').textContent = `${data.newBalance} 🪙`;
+                    loadShop(); // Reload to update UI
+                } else {
+                    showMessage(data.error || 'Purchase failed', 'error');
+                }
+            } catch (error) {
+                showMessage('Network error. Please try again.', 'error');
+            }
+        }
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'block';
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 5000);
+        }
+
+        // Load shop on page load
+        loadShop();
+    </script>
+</body>
+</html>

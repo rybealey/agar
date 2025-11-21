@@ -72,32 +72,67 @@ function preloadSkinImage(filename) {
 // Load available skins
 async function loadAvailableSkins() {
     try {
-        const response = await fetch('/api/skins');
-        const skins = await response.json();
+        // Check authentication status
+        let userAuthenticated = false;
+        let ownedSkins = new Set();
+
+        try {
+            const userResponse = await fetch('/api/user');
+            const userData = await userResponse.json();
+
+            if (userData.authenticated && userData.user) {
+                userAuthenticated = true;
+
+                // Fetch owned skins
+                const skinsResponse = await fetch('/api/user/skins');
+                const skinsData = await skinsResponse.json();
+                ownedSkins = new Set(skinsData.skins.map(s => s.filename));
+            }
+        } catch (error) {
+            // User not authenticated, continue as guest
+            userAuthenticated = false;
+        }
 
         const skinLoader = document.getElementById('skinLoader');
         skinLoader.remove();
 
-        skins.forEach(skin => {
-            const option = document.createElement('div');
-            option.className = 'skin-option';
-            option.dataset.skin = skin.filename;
+        // For guests: remove custom color option, only allow random color
+        if (!userAuthenticated) {
+            const customColorOption = document.querySelector('.skin-option[data-skin="custom"]');
+            if (customColorOption) {
+                customColorOption.remove();
+            }
+        }
 
-            const preview = document.createElement('div');
-            preview.className = 'skin-preview';
-            preview.style.backgroundImage = `url('/skins/${skin.filename}')`;
+        // Only load skins if user is authenticated
+        if (userAuthenticated) {
+            const response = await fetch('/api/skins');
+            const skins = await response.json();
 
-            const label = document.createElement('div');
-            label.className = 'skin-label';
-            label.textContent = skin.name;
+            // Only show skins that the user owns
+            skins.forEach(skin => {
+                if (ownedSkins.has(skin.filename)) {
+                    const option = document.createElement('div');
+                    option.className = 'skin-option';
+                    option.dataset.skin = skin.filename;
 
-            option.appendChild(preview);
-            option.appendChild(label);
-            skinOptions.appendChild(option);
+                    const preview = document.createElement('div');
+                    preview.className = 'skin-preview';
+                    preview.style.backgroundImage = `url('/skins/${skin.filename}')`;
 
-            // Preload skin images in background
-            preloadSkinImage(skin.filename);
-        });
+                    const label = document.createElement('div');
+                    label.className = 'skin-label';
+                    label.textContent = skin.name;
+
+                    option.appendChild(preview);
+                    option.appendChild(label);
+                    skinOptions.appendChild(option);
+
+                    // Preload skin images in background
+                    preloadSkinImage(skin.filename);
+                }
+            });
+        }
 
         // Select "Random Color" by default
         document.querySelector('.skin-option[data-skin="none"]').classList.add('selected');

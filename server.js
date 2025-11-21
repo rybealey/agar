@@ -144,7 +144,7 @@ if (!fs.existsSync(skinsDir)) {
 }
 
 // Session configuration
-app.use(session({
+const sessionMiddleware = session({
     secret: process.env.SESSION_SECRET || 'agar-admin-secret-change-in-production',
     resave: false,
     saveUninitialized: false,
@@ -153,7 +153,14 @@ app.use(session({
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
-}));
+});
+
+app.use(sessionMiddleware);
+
+// Share session with socket.io
+io.use((socket, next) => {
+    sessionMiddleware(socket.request, {}, next);
+});
 
 app.use(express.static('public'));
 app.use(express.json());
@@ -960,14 +967,35 @@ io.on('connection', (socket) => {
     });
 
     // Handle player skin selection
-    socket.on('set-skin', (skin, customColor) => {
+    socket.on('set-skin', async (skin, customColor) => {
         const player = players[socket.id];
         if (!player) return;
-        player.skin = skin || 'none';
 
-        // If custom color is selected, use the provided color
-        if (skin === 'custom' && customColor) {
-            player.color = customColor;
+        const userId = socket.request.session?.userId;
+
+        // Validate skin selection based on authentication and ownership
+        if (skin === 'none' || !skin) {
+            // Random color - always allowed
+            player.skin = 'none';
+        } else if (skin === 'custom') {
+            // Custom color - only allowed if authenticated
+            if (userId) {
+                player.skin = 'custom';
+                if (customColor) {
+                    player.color = customColor;
+                }
+            } else {
+                // Guest trying to use custom color - force to random
+                player.skin = 'none';
+            }
+        } else {
+            // Custom skin file - must be owned by user
+            if (userId && db.userOwnsSkin(userId, skin)) {
+                player.skin = skin;
+            } else {
+                // User doesn't own this skin or not authenticated - force to random
+                player.skin = 'none';
+            }
         }
     });
 

@@ -132,6 +132,16 @@ read -p "Do you want to install and configure Nginx as a reverse proxy? (y/n): "
 echo ""
 
 if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
+    # Make sure the app is running before setting up Nginx
+    if ! pm2 list | grep -q "agar.*online" 2>/dev/null; then
+        print_info "Starting application first (required for Nginx)..."
+        node server.js &
+        APP_PID=$!
+        sleep 3  # Give the app time to start
+        print_success "Application started (PID: $APP_PID)"
+        echo ""
+    fi
+
     # Install Nginx
     print_info "Installing Nginx..."
     wait_for_apt

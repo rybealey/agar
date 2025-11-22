@@ -135,11 +135,26 @@ if [ "$REPLY" = "y" ] || [ "$REPLY" = "Y" ]; then
     # Make sure the app is running before setting up Nginx
     if ! pm2 list | grep -q "agar.*online" 2>/dev/null; then
         print_info "Starting application first (required for Nginx)..."
-        node server.js &
+
+        # Start the app with nohup to keep it running after script exits
+        nohup node server.js > agar.log 2>&1 &
         APP_PID=$!
-        sleep 3  # Give the app time to start
-        print_success "Application started (PID: $APP_PID)"
-        echo ""
+
+        # Wait for the app to actually start listening on port 3000
+        print_info "Waiting for application to start on port 3000..."
+        for i in {1..30}; do
+            if lsof -Pi :3000 -sTCP:LISTEN -t >/dev/null 2>&1 ; then
+                print_success "Application started and listening on port 3000 (PID: $APP_PID)"
+                echo ""
+                break
+            fi
+            sleep 1
+            if [ $i -eq 30 ]; then
+                print_error "Application failed to start within 30 seconds"
+                print_info "Check agar.log for errors"
+                exit 1
+            fi
+        done
     fi
 
     # Install Nginx
@@ -216,7 +231,13 @@ EOF
             print_info "Note: Make sure your domain DNS is pointing to this server!"
             echo ""
 
-            if sudo certbot --nginx -d "$SERVER_NAME" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect; then
+            # Certbot may fail if DNS isn't set up yet, but that's okay
+            set +e  # Temporarily disable exit on error
+            sudo certbot --nginx -d "$SERVER_NAME" --non-interactive --agree-tos --email "$SSL_EMAIL" --redirect
+            CERTBOT_EXIT_CODE=$?
+            set -e  # Re-enable exit on error
+
+            if [ $CERTBOT_EXIT_CODE -eq 0 ]; then
                 print_success "SSL certificate installed successfully!"
                 print_success "Your game is now accessible at: https://$SERVER_NAME"
                 echo ""
@@ -228,13 +249,15 @@ EOF
                 print_success "Auto-renewal configured (certificates will renew automatically)"
                 echo ""
             else
-                print_error "SSL certificate installation failed."
+                print_error "SSL certificate installation failed (this is not critical)."
                 print_info "This usually means:"
                 print_info "  1. Your domain DNS is not pointing to this server yet"
                 print_info "  2. Port 80 is not accessible from the internet"
                 print_info "  3. The domain name is incorrect"
                 echo ""
-                print_info "You can try again later with:"
+                print_success "Your game is still accessible via HTTP at: http://$SERVER_NAME"
+                echo ""
+                print_info "You can install SSL later with:"
                 print_info "  sudo certbot --nginx -d $SERVER_NAME"
                 echo ""
             fi
@@ -281,17 +304,14 @@ echo ""
 print_success "Agar Chungus is now set up!"
 echo ""
 echo "Next steps:"
-echo "  1. If you didn't use PM2, start the server manually:"
-echo "     npm start"
-echo ""
-echo "  2. Access your game:"
+echo "  1. Access your game:"
 if [ -n "$SERVER_NAME" ]; then
     echo "     http://$SERVER_NAME (or https:// if SSL was configured)"
 else
     echo "     http://YOUR_SERVER_IP:3000"
 fi
 echo ""
-echo "  3. Admin Panel:"
+echo "  2. Admin Panel:"
 echo "     Access /admin.html to manage game skins"
 echo ""
 echo "Game Controls:"
@@ -300,9 +320,12 @@ echo "  • Space: Split into smaller blobs"
 echo "  • W: Eject mass"
 echo ""
 echo "Useful Commands:"
-if command -v pm2 &> /dev/null; then
+if command -v pm2 &> /dev/null && pm2 list | grep -q "agar.*online" 2>/dev/null; then
     echo "  • pm2 logs agar     - View application logs"
     echo "  • pm2 restart agar  - Restart application"
+elif [ -f "agar.log" ]; then
+    echo "  • tail -f agar.log  - View application logs"
+    echo "  • ps aux | grep 'node server.js' - Check if app is running"
 fi
 if [ -f "/etc/nginx/sites-available/agar" ]; then
     echo "  • sudo systemctl status nginx   - Check Nginx status"

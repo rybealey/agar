@@ -1124,6 +1124,15 @@ setInterval(() => {
         }
     }
 
+    // Clean up expired coin drops (120 seconds)
+    for (let i = coinDrops.length - 1; i >= 0; i--) {
+        const coin = coinDrops[i];
+        const tooOld = coin.createdAt && (Date.now() - coin.createdAt > 120000);
+        if (tooOld) {
+            coinDrops.splice(i, 1);
+        }
+    }
+
     // Move all blobs toward their targets
     for (const player of allPlayers) {
         player.blobs.forEach(blob => {
@@ -1273,6 +1282,12 @@ setInterval(() => {
                         if (playerSocket) {
                             playerSocket.emit('coin-collected', { amount: coin.value });
                         }
+                    } else {
+                        // Non-authenticated user collected coin - notify them about account benefits
+                        const playerSocket = io.sockets.sockets.get(player.id);
+                        if (playerSocket) {
+                            playerSocket.emit('coin-collected-guest', { amount: coin.value });
+                        }
                     }
                     // Remove the coin drop (anyone can collect, but only logged-in users get coins)
                     coinDrops.splice(i, 1);
@@ -1322,8 +1337,9 @@ setInterval(() => {
         ...getRandomPosition(coinRadius),
         radius: coinRadius,
         value: 50, // 50 coins
+        createdAt: Date.now() // Track when coin was created for expiration
     });
-}, 180000); // Spawn a coin every 3 minutes
+}, 300000); // Spawn a coin every 5 minutes (reduced spawn rate)
 
 server.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);

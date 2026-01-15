@@ -270,6 +270,11 @@ function setupSocketListeners() {
             }, 1000);
         }
     });
+
+    // Handle coin collection for non-authenticated users
+    socket.on('coin-collected-guest', ({ amount }) => {
+        showGuestCoinToast(amount);
+    });
 }
 
 // Death screen with countdown and auto-refresh
@@ -653,3 +658,47 @@ checkAuthStatus();
 
 // Update coin balance periodically
 setInterval(checkAuthStatus, 30000); // Update every 30 seconds
+
+// Show toast notification for guest users who collect coins
+function showGuestCoinToast(amount) {
+    const toastContainer = document.getElementById('toastContainer');
+    if (!toastContainer) return;
+
+    // Check if user is still not authenticated (they might have logged in since)
+    const userDisplay = document.getElementById('userDisplay');
+    if (userDisplay && userDisplay.style.display !== 'none') {
+        // User is now logged in, don't show toast
+        return;
+    }
+
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `
+        <div class="toast-icon">💰</div>
+        <div class="toast-content">
+            <div class="toast-title">Coin Collected!</div>
+            <div class="toast-message">
+                You collected ${amount} coins, but you're not logged in. Create a free account to keep your coins and buy skins!
+            </div>
+            <div class="toast-actions">
+                <a href="/register.html" class="toast-button">Create Free Account</a>
+                <a href="/login.html" class="toast-button">Login</a>
+            </div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">×</button>
+    `;
+
+    // Add to container
+    toastContainer.appendChild(toast);
+
+    // Auto-remove after 8 seconds
+    setTimeout(() => {
+        toast.classList.add('fade-out');
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 300);
+    }, 8000);
+}

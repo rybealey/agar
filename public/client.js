@@ -586,19 +586,68 @@ function draw() {
 
 draw();
 
-canvas.addEventListener('mousemove', (e) => {
-    if (!me || !gameStarted || !socket) return;
+// Throttle mousemove events for smoother performance
+let lastMouseUpdate = 0;
+const MOUSE_UPDATE_INTERVAL = 16; // ~60 FPS max (16ms between updates)
+let pendingMouseTarget = null;
+let mouseUpdateTimeout = null;
+
+function calculateMouseTarget(e) {
     const rect = canvas.getBoundingClientRect();
+    
+    // Use the latest player data from the players object (more reliable than 'me')
+    const currentPlayer = players[socket.id];
+    if (!currentPlayer || !currentPlayer.blobs || currentPlayer.blobs.length === 0) {
+        // Fallback to 'me' if players object doesn't have our data yet
+        if (!me || !me.blobs || me.blobs.length === 0) return null;
+        const centerX = me.blobs.reduce((sum, blob) => sum + blob.x, 0) / me.blobs.length;
+        const centerY = me.blobs.reduce((sum, blob) => sum + blob.y, 0) / me.blobs.length;
+        return {
+            x: e.clientX - rect.left - (canvas.width / 2) + centerX,
+            y: e.clientY - rect.top - (canvas.height / 2) + centerY,
+        };
+    }
+    
+    // Calculate center of all player's blobs using latest data
+    const centerX = currentPlayer.blobs.reduce((sum, blob) => sum + blob.x, 0) / currentPlayer.blobs.length;
+    const centerY = currentPlayer.blobs.reduce((sum, blob) => sum + blob.y, 0) / currentPlayer.blobs.length;
 
-    // Calculate center of all player's blobs
-    const centerX = me.blobs.reduce((sum, blob) => sum + blob.x, 0) / me.blobs.length;
-    const centerY = me.blobs.reduce((sum, blob) => sum + blob.y, 0) / me.blobs.length;
-
-    const target = {
+    return {
         x: e.clientX - rect.left - (canvas.width / 2) + centerX,
         y: e.clientY - rect.top - (canvas.height / 2) + centerY,
     };
-    socket.emit('mousemove', target);
+}
+
+function sendPendingMouseUpdate() {
+    if (pendingMouseTarget && socket && gameStarted) {
+        socket.emit('mousemove', pendingMouseTarget);
+        pendingMouseTarget = null;
+    }
+    mouseUpdateTimeout = null;
+}
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!me || !gameStarted || !socket) return;
+    
+    const target = calculateMouseTarget(e);
+    if (!target) return;
+    
+    const now = Date.now();
+    
+    // Always update pending target with latest position
+    pendingMouseTarget = target;
+    
+    // Send immediately if enough time has passed
+    if (now - lastMouseUpdate >= MOUSE_UPDATE_INTERVAL) {
+        lastMouseUpdate = now;
+        sendPendingMouseUpdate();
+    } else {
+        // Schedule a delayed send if not already scheduled
+        if (!mouseUpdateTimeout) {
+            const delay = MOUSE_UPDATE_INTERVAL - (now - lastMouseUpdate);
+            mouseUpdateTimeout = setTimeout(sendPendingMouseUpdate, delay);
+        }
+    }
 });
 
 // Handle keyboard inputs

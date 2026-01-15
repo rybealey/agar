@@ -957,10 +957,20 @@ io.on('connection', (socket) => {
         const player = players[socket.id];
         if (!player) return;
 
+        // Validate target coordinates
+        if (typeof target.x !== 'number' || typeof target.y !== 'number' || 
+            isNaN(target.x) || isNaN(target.y)) {
+            return; // Ignore invalid targets
+        }
+
+        // Clamp target to map boundaries to prevent glitches
+        const clampedX = Math.max(0, Math.min(MAP_WIDTH, target.x));
+        const clampedY = Math.max(0, Math.min(MAP_HEIGHT, target.y));
+
         // Set target for all blobs
         player.blobs.forEach(blob => {
-            blob.targetX = target.x;
-            blob.targetY = target.y;
+            blob.targetX = clampedX;
+            blob.targetY = clampedY;
         });
     });
 
@@ -1152,15 +1162,31 @@ setInterval(() => {
                 }
             }
 
-            // Normal movement toward target
+            // Normal movement toward target with smooth interpolation
             const dx = blob.targetX - blob.x;
             const dy = blob.targetY - blob.y;
             const dist = Math.hypot(dx, dy);
 
-            if (dist > 1) {
-                const angle = Math.atan2(dy, dx);
-                blob.x += Math.cos(angle) * blob.speed;
-                blob.y += Math.sin(angle) * blob.speed;
+            if (dist > 0.5) {
+                // Use smooth interpolation for better movement
+                // Move faster when far from target, slower when close
+                const maxSpeed = blob.speed;
+                const minSpeed = maxSpeed * 0.3; // Minimum speed when very close
+                const speedFactor = Math.min(1, dist / 50); // Smooth speed transition
+                const currentSpeed = minSpeed + (maxSpeed - minSpeed) * speedFactor;
+                
+                // Cap movement to prevent overshooting
+                const moveDistance = Math.min(dist, currentSpeed);
+                
+                if (moveDistance > 0) {
+                    const angle = Math.atan2(dy, dx);
+                    blob.x += Math.cos(angle) * moveDistance;
+                    blob.y += Math.sin(angle) * moveDistance;
+                }
+            } else {
+                // Very close to target - snap to it to prevent jitter
+                blob.x = blob.targetX;
+                blob.y = blob.targetY;
             }
 
             // Clamp position to map boundaries

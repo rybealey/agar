@@ -13,6 +13,7 @@ let selectedSkin = 'none'; // Track selected skin
 let customColor = '#ff6b6b'; // Track custom color selection
 let skinImages = {}; // Cache loaded skin images
 let preloadedSkins = new Set(); // Track which skins have been preloaded
+let isUserAuthenticated = false; // Track authentication state for toast notifications
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
@@ -275,6 +276,11 @@ function setupSocketListeners() {
     socket.on('coin-collected-guest', ({ amount }) => {
         showGuestCoinToast(amount);
     });
+
+    // Handle chat messages
+    socket.on('chat-message', ({ username, message, isSystem }) => {
+        addChatMessage(username, message, isSystem);
+    });
 }
 
 // Death screen with countdown and auto-refresh
@@ -332,6 +338,14 @@ function startGame() {
 
     nameOverlay.style.display = 'none';
     gameStarted = true;
+    
+    // Focus chat input when game starts
+    setTimeout(() => {
+        const chatInput = document.getElementById('chatInput');
+        if (chatInput) {
+            chatInput.focus();
+        }
+    }, 200);
 }
 
 playButton.addEventListener('click', startGame);
@@ -654,12 +668,41 @@ canvas.addEventListener('mousemove', (e) => {
 window.addEventListener('keydown', (e) => {
     if (!me || !gameStarted || !socket) return;
 
-    if (e.key === 'w' || e.key === 'W') {
-        socket.emit('eject-mass');
-    } else if (e.key === ' ') {
-        e.preventDefault(); // Prevent page scroll
-        socket.emit('split');
+    const chatInput = document.getElementById('chatInput');
+    
+    // Escape key toggles chat mode
+    if (e.key === 'Escape') {
+        if (chatMode) {
+            // Exit chat mode - clear input and return to game mode
+            chatMode = false;
+            if (chatInput) {
+                chatInput.value = '';
+                updateChatModeIndicator();
+            }
+        } else {
+            // Enter chat mode
+            chatMode = true;
+            if (chatInput) {
+                chatInput.focus();
+                updateChatModeIndicator();
+            }
+        }
+        e.preventDefault();
+        return;
     }
+    
+    // In chat mode: Space and W are for typing
+    // In game mode: Space and W are for game controls
+    if (!chatMode) {
+        // Game mode - handle game controls
+        if (e.key === 'w' || e.key === 'W') {
+            socket.emit('eject-mass');
+        } else if (e.key === ' ') {
+            e.preventDefault(); // Prevent page scroll
+            socket.emit('split');
+        }
+    }
+    // If in chat mode, let the input handle Space and W normally
 });
 
 // Authentication UI
@@ -673,17 +716,20 @@ async function checkAuthStatus() {
 
         if (data.authenticated && data.user) {
             // User is logged in
+            isUserAuthenticated = true;
             authLinks.style.display = 'none';
             userDisplay.style.display = 'block';
             document.getElementById('userEmail').textContent = data.user.email;
             document.getElementById('userCoins').textContent = `${data.user.coins} 🪙`;
         } else {
             // User is not logged in
+            isUserAuthenticated = false;
             authLinks.style.display = 'block';
             userDisplay.style.display = 'none';
         }
     } catch (error) {
-        // If error, show login links
+        // If error, assume not authenticated
+        isUserAuthenticated = false;
         document.getElementById('authLinks').style.display = 'block';
         document.getElementById('userDisplay').style.display = 'none';
     }
@@ -708,15 +754,214 @@ checkAuthStatus();
 // Update coin balance periodically
 setInterval(checkAuthStatus, 30000); // Update every 30 seconds
 
+// Chat System
+const chatInput = document.getElementById('chatInput');
+const chatSend = document.getElementById('chatSend');
+const chatMessages = document.getElementById('chatMessages');
+const chatToggle = document.getElementById('chatToggle');
+const chat = document.getElementById('chat');
+
+let chatCollapsed = false;
+let chatMode = false; // Track if player is in chat typing mode
+const MAX_CHAT_MESSAGES = 50;
+
+// Toggle chat collapse
+if (chatToggle) {
+    chatToggle.addEventListener('click', () => {
+        chatCollapsed = !chatCollapsed;
+        if (chatCollapsed) {
+            chat.classList.add('collapsed');
+            chatToggle.textContent = '+';
+            chatMode = false;
+            updateChatModeIndicator();
+        } else {
+            chat.classList.remove('collapsed');
+            chatToggle.textContent = '−';
+            // Don't auto-focus - let user press Escape to enter chat mode
+        }
+    });
+}
+
+// Send chat message
+function sendChatMessage() {
+    if (!socket || !gameStarted) return;
+    
+    const message = chatInput.value.trim();
+    if (!message) return;
+    
+    // Limit message length
+    if (message.length > 100) {
+        chatInput.value = message.substring(0, 100);
+        return;
+    }
+    
+    // Send message to server
+    socket.emit('chat-message', { message });
+    
+    // Clear input and exit chat mode
+    chatInput.value = '';
+    chatMode = false;
+    updateChatModeIndicator();
+}
+
+// Add chat message to display
+function addChatMessage(username, message, isSystem = false) {
+    if (!chatMessages) return;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'chat-message';
+    
+    if (isSystem) {
+        messageDiv.className += ' chat-message-system';
+        messageDiv.textContent = message;
+    } else {
+        const usernameSpan = document.createElement('span');
+        usernameSpan.className = 'chat-message-username';
+        usernameSpan.textContent = username + ':';
+        
+        const textSpan = document.createElement('span');
+        textSpan.className = 'chat-message-text';
+        textSpan.textContent = ' ' + message;
+        
+        messageDiv.appendChild(usernameSpan);
+        messageDiv.appendChild(textSpan);
+    }
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Limit number of messages
+    while (chatMessages.children.length > MAX_CHAT_MESSAGES) {
+        chatMessages.removeChild(chatMessages.firstChild);
+    }
+    
+    // Auto-scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Update chat mode indicator
+function updateChatModeIndicator() {
+    const chatHeader = document.getElementById('chatHeader');
+    if (!chatHeader) return;
+    
+    let indicator = document.getElementById('chatModeIndicator');
+    if (!indicator) {
+        indicator = document.createElement('span');
+        indicator.id = 'chatModeIndicator';
+        indicator.style.cssText = 'font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: normal; flex-shrink: 0;';
+        // Insert before the toggle button
+        const toggle = document.getElementById('chatToggle');
+        if (toggle && toggle.parentNode) {
+            toggle.parentNode.insertBefore(indicator, toggle);
+        } else {
+            chatHeader.appendChild(indicator);
+        }
+    }
+    
+    if (chatMode) {
+        indicator.textContent = 'CHAT MODE';
+        indicator.style.backgroundColor = '#4CAF50';
+        indicator.style.color = 'white';
+        if (chatInput) {
+            chatInput.style.borderColor = '#4CAF50';
+            chatInput.style.boxShadow = '0 0 0 2px rgba(76, 175, 80, 0.2)';
+        }
+    } else {
+        indicator.textContent = 'GAME MODE';
+        indicator.style.backgroundColor = '#999';
+        indicator.style.color = 'white';
+        if (chatInput) {
+            chatInput.style.borderColor = '#ddd';
+            chatInput.style.boxShadow = 'none';
+        }
+    }
+}
+
+// Chat input handlers
+if (chatInput && chatSend) {
+    // Don't auto-focus - let players toggle with Escape
+    // Only focus when explicitly entering chat mode
+    
+    // Track when user starts typing to automatically enter chat mode
+    chatInput.addEventListener('input', (e) => {
+        if (e.target.value.length > 0 && !chatMode) {
+            chatMode = true;
+            updateChatModeIndicator();
+        } else if (e.target.value.length === 0 && chatMode) {
+            // Auto-exit chat mode when input is cleared
+            chatMode = false;
+            updateChatModeIndicator();
+        }
+    });
+    
+    // Focus chat input when entering chat mode
+    function focusChatIfInMode() {
+        if (chatMode && chatInput && gameStarted && !chatCollapsed) {
+            if (document.activeElement !== chatInput) {
+                chatInput.focus();
+            }
+        }
+    }
+    
+    // Periodically check if we should focus (only in chat mode)
+    setInterval(focusChatIfInMode, 500);
+    
+    // Re-focus after sending a message (only if in chat mode)
+    chatSend.addEventListener('click', () => {
+        sendChatMessage();
+        if (chatMode) {
+            setTimeout(() => {
+                if (chatInput) chatInput.focus();
+            }, 10);
+        }
+    });
+    
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            sendChatMessage();
+            // After sending, stay in chat mode if user wants to type more
+            if (chatMode) {
+                setTimeout(() => {
+                    if (chatInput) chatInput.focus();
+                }, 10);
+            }
+        }
+    });
+    
+    // Handle Escape key in chat input
+    chatInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            chatMode = false;
+            chatInput.value = '';
+            updateChatModeIndicator();
+            e.preventDefault();
+            e.stopPropagation();
+        } else if (e.key === 'Enter') {
+            e.stopPropagation(); // Prevent game from handling Enter
+        }
+    });
+    
+    // Initialize chat mode indicator
+    updateChatModeIndicator();
+}
+
 // Show toast notification for guest users who collect coins
 function showGuestCoinToast(amount) {
     const toastContainer = document.getElementById('toastContainer');
-    if (!toastContainer) return;
+    if (!toastContainer) {
+        return;
+    }
 
-    // Check if user is still not authenticated (they might have logged in since)
+    // Double-check authentication status before showing toast
     const userDisplay = document.getElementById('userDisplay');
-    if (userDisplay && userDisplay.style.display !== 'none') {
-        // User is now logged in, don't show toast
+    const authLinks = document.getElementById('authLinks');
+    
+    // If userDisplay is visible, user is authenticated - don't show toast
+    if (userDisplay && userDisplay.style.display !== 'none' && userDisplay.style.display !== '') {
+        return;
+    }
+    
+    // Also check the isUserAuthenticated flag
+    if (isUserAuthenticated) {
         return;
     }
 

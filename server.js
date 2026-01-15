@@ -978,7 +978,17 @@ io.on('connection', (socket) => {
     socket.on('set-name', (name) => {
         const player = players[socket.id];
         if (!player) return;
+        const hadName = !!player.name;
         player.name = name || '';
+        
+        // Notify chat when a player first sets their name
+        if (!hadName && player.name) {
+            io.emit('chat-message', {
+                username: '',
+                message: `${player.name} joined the game`,
+                isSystem: true
+            });
+        }
     });
 
     // Handle player skin selection
@@ -1107,9 +1117,37 @@ io.on('connection', (socket) => {
         });
     });
 
+    // Handle chat messages
+    socket.on('chat-message', (data) => {
+        const player = players[socket.id];
+        if (!player) return;
+
+        const message = (data.message || '').trim();
+        if (!message || message.length === 0 || message.length > 100) return;
+
+        // Get player name or use default
+        const username = player.name || 'Anonymous';
+
+        // Broadcast message to all players
+        io.emit('chat-message', {
+            username: username,
+            message: message,
+            isSystem: false
+        });
+    });
+
     // Handle player disconnection
     socket.on('disconnect', () => {
         console.log('A user disconnected:', socket.id);
+        const player = players[socket.id];
+        if (player && player.name) {
+            // Notify chat that player left
+            io.emit('chat-message', {
+                username: '',
+                message: `${player.name} left the game`,
+                isSystem: true
+            });
+        }
         delete players[socket.id];
         io.emit('player-left', socket.id);
     });
@@ -1119,17 +1157,57 @@ io.on('connection', (socket) => {
 setInterval(() => {
     const allPlayers = Object.values(players);
 
-    // Move and clean up pellets
+    // Move and handle boundary collisions for pellets
     for (let i = pellets.length - 1; i >= 0; i--) {
         const pellet = pellets[i];
+        
+        // Move pellet
         pellet.x += pellet.vx;
         pellet.y += pellet.vy;
+        
+        // Check for boundary collisions and bounce
+        let bounced = false;
+        
+        // Left boundary
+        if (pellet.x - pellet.radius < 0) {
+            pellet.x = pellet.radius; // Clamp position
+            pellet.vx = -pellet.vx; // Reverse horizontal velocity
+            bounced = true;
+        }
+        // Right boundary
+        else if (pellet.x + pellet.radius > MAP_WIDTH) {
+            pellet.x = MAP_WIDTH - pellet.radius; // Clamp position
+            pellet.vx = -pellet.vx; // Reverse horizontal velocity
+            bounced = true;
+        }
+        
+        // Top boundary
+        if (pellet.y - pellet.radius < 0) {
+            pellet.y = pellet.radius; // Clamp position
+            pellet.vy = -pellet.vy; // Reverse vertical velocity
+            bounced = true;
+        }
+        // Bottom boundary
+        else if (pellet.y + pellet.radius > MAP_HEIGHT) {
+            pellet.y = MAP_HEIGHT - pellet.radius; // Clamp position
+            pellet.vy = -pellet.vy; // Reverse vertical velocity
+            bounced = true;
+        }
+        
+        // Apply damping to velocity (friction)
         pellet.vx *= 0.95;
         pellet.vy *= 0.95;
-
-        const outOfBounds = pellet.x < 0 || pellet.x > MAP_WIDTH || pellet.y < 0 || pellet.y > MAP_HEIGHT;
+        
+        // If pellet bounced, apply slight bounce damping to prevent infinite bouncing
+        if (bounced) {
+            pellet.vx *= 0.9; // Additional damping on bounce
+            pellet.vy *= 0.9;
+        }
+        
+        // Remove pellet if it's too old (30 seconds) or if velocity is negligible
         const tooOld = Date.now() - pellet.createdAt > 30000;
-        if (outOfBounds || tooOld) {
+        const velocityTooLow = Math.abs(pellet.vx) < 0.1 && Math.abs(pellet.vy) < 0.1;
+        if (tooOld || velocityTooLow) {
             pellets.splice(i, 1);
         }
     }
